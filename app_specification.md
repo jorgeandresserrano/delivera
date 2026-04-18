@@ -87,6 +87,16 @@ Examples:
 
 Deliverable types also define the assignment role templates used when a deliverable is created.
 
+Each deliverable type can include multiple role rows.
+
+Each assignment template row on a deliverable type defines:
+
+- one role
+
+Important rule:
+
+- each role may appear only once per deliverable type
+
 ---
 
 ## Project Phases
@@ -392,7 +402,7 @@ Delivera is a secure, relational, project-based application where:
 - lifecycle stage sets define ordered stage templates and never store dates
 - each deliverable owns instantiated stage records with expected dates, actual dates, and explicit status
 - the current stage is derived from those stage records
-- assignment roles are configurable per deliverable type and instantiated per deliverable
+- assignment roles and member counts are configurable per deliverable type and instantiated per deliverable
 - follow-up comments are logged chronologically
 - a full audit trail captures important changes over time
 - users are authenticated through a single users model with simple owner/viewer permissions

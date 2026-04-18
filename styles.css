@@ -811,51 +811,74 @@ button {
   width: fit-content;
 }
 
-.ruleset-form {
+.ruleset-form,
+.type-form {
   display: grid;
   gap: 16px;
 }
 
-.ruleset-rule-group {
+.ruleset-rule-group,
+.type-allocation-group {
   display: grid;
   gap: 10px;
 }
 
 .ruleset-rule-group-head,
+.type-allocation-group-head,
 .ruleset-card-head,
+.type-card-head,
 .ruleset-card-actions,
+.type-card-actions,
 .ruleset-rule-group-tools,
-.ruleset-form-actions {
+.type-allocation-group-tools,
+.ruleset-form-actions,
+.type-form-actions {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .ruleset-rule-group-head,
-.ruleset-card-head {
+.type-allocation-group-head,
+.ruleset-card-head,
+.type-card-head {
   justify-content: space-between;
 }
 
 .ruleset-card-actions,
-.ruleset-rule-group-tools {
+.type-card-actions,
+.ruleset-rule-group-tools,
+.type-allocation-group-tools {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
 .ruleset-rule-grid,
-.ruleset-list {
+.type-allocation-grid,
+.ruleset-list,
+.type-list {
   display: grid;
   gap: 10px;
 }
 
 .rule-row,
-.ruleset-card {
+.allocation-row,
+.ruleset-card,
+.type-card {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fffdfa;
 }
 
 .rule-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 10px 12px 10px 0;
+}
+
+.allocation-row {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: start;
@@ -880,41 +903,50 @@ button {
   font-weight: 600;
 }
 
-.ruleset-form-actions {
+.ruleset-form-actions,
+.type-form-actions {
   flex-wrap: wrap;
 }
 
-.ruleset-card {
+.ruleset-card,
+.type-card {
   display: grid;
   gap: 14px;
   padding: 16px;
 }
 
-.ruleset-card-editing {
+.ruleset-card-editing,
+.type-card-editing {
   background: rgba(255, 253, 250, 0.96);
 }
 
-.ruleset-card-copy {
+.ruleset-card-copy,
+.type-card-copy {
   display: grid;
   gap: 4px;
 }
 
 .ruleset-card-title,
-.ruleset-card-meta {
+.ruleset-card-meta,
+.type-card-title,
+.type-card-meta {
   margin: 0;
 }
 
-.ruleset-card-title {
+.ruleset-card-title,
+.type-card-title {
   font-size: 1rem;
   font-weight: 650;
 }
 
-.ruleset-card-meta {
+.ruleset-card-meta,
+.type-card-meta {
   color: var(--text-muted);
   font-size: 0.82rem;
 }
 
-.ruleset-rule-list {
+.ruleset-rule-list,
+.type-allocation-list {
   display: grid;
   gap: 8px;
   margin: 0;
@@ -922,7 +954,8 @@ button {
   list-style: none;
 }
 
-.ruleset-rule-list-item {
+.ruleset-rule-list-item,
+.type-allocation-list-item {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
   align-items: start;
@@ -945,6 +978,11 @@ button {
   display: grid;
   gap: 4px;
   min-width: 0;
+}
+
+.ruleset-rule-copy span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }
 
 .confirmation-modal {
@@ -1097,38 +1135,55 @@ button {
     grid-template-columns: 42px minmax(0, 1fr);
   }
 
+  .allocation-row {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
   .definition-actions {
     grid-column: 2;
     justify-content: flex-start;
   }
 
   .rule-row .field,
-  .rule-row .definition-action {
+  .rule-row .definition-action,
+  .allocation-row .field,
+  .allocation-row .definition-action {
     grid-column: 2;
   }
 
   .ruleset-rule-group-head,
+  .type-allocation-group-head,
   .ruleset-card-head,
+  .type-card-head,
   .ruleset-card-actions,
+  .type-card-actions,
   .ruleset-rule-group-tools,
-  .ruleset-form-actions {
+  .type-allocation-group-tools,
+  .ruleset-form-actions,
+  .type-form-actions {
     align-items: stretch;
     flex-direction: column;
   }
 
   .ruleset-card-actions,
-  .ruleset-rule-group-tools {
+  .type-card-actions,
+  .ruleset-rule-group-tools,
+  .type-allocation-group-tools {
     justify-content: flex-start;
   }
 
   .ruleset-form-actions .primary-button,
   .ruleset-form-actions .definition-action,
+  .type-form-actions .primary-button,
+  .type-form-actions .definition-action,
   .ruleset-rule-group-tools .definition-action,
+  .type-allocation-group-tools .definition-action,
   .ruleset-count-pill {
     width: 100%;
   }
 
-  .ruleset-rule-list-item {
+  .ruleset-rule-list-item,
+  .type-allocation-list-item {
     grid-template-columns: 34px minmax(0, 1fr);
   }
 

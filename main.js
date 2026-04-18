@@ -79,6 +79,10 @@ const createEmptyStage = () => ({
   name: "",
 });
 
+const createEmptyTypeAllocation = () => ({
+  roleId: "",
+});
+
 const createDeliverablesTableFilters = () => ({
   code: "",
   typeId: "",
@@ -382,6 +386,7 @@ let editingDefinition = {
   view: null,
   itemId: null,
 };
+let editingDeliverableTypeId = null;
 let editingRuleSetId = null;
 
 const getProjectState = (projectId) => {
@@ -406,6 +411,8 @@ const getDeliverables = (projectId) => getProjectState(projectId).deliverables;
 
 const getRoles = (projectId) => getProjectState(projectId).roles;
 
+const findRole = (projectId, roleId) => getRoles(projectId).find((item) => item.id === roleId);
+
 const findDefinitionItem = (view, projectId, itemId) =>
   getDefinitionItems(view, projectId).find((item) => item.id === itemId);
 
@@ -426,6 +433,14 @@ const getDefinitionDisplayName = (view, projectId, itemId) => {
 const getRuleSetDisplayName = (projectId, ruleSetId) =>
   findRuleSet(projectId, ruleSetId)?.name ?? "Unknown";
 
+const getRoleOptions = (projectId) =>
+  getRoles(projectId).map((role) => ({
+    value: role.id,
+    label: role.name,
+  }));
+
+const getRoleDisplayName = (projectId, roleId) => findRole(projectId, roleId)?.name ?? "Unknown role";
+
 const getDefinitionOptions = (view, projectId) =>
   getDefinitionItems(view, projectId).map((item) => ({
     value: item.id,
@@ -443,6 +458,11 @@ const getDeliverablesUsingDefinition = (projectId, field, itemId) =>
 
 const getDeliverablesUsingRuleSet = (projectId, ruleSetId) =>
   getDeliverables(projectId).filter((deliverable) => deliverable.ruleSetId === ruleSetId);
+
+const getDeliverableTypesUsingRole = (projectId, roleId) =>
+  getDefinitionItems("types", projectId).filter((deliverableType) =>
+    (deliverableType.allocations ?? []).some((allocation) => allocation.roleId === roleId),
+  );
 
 const hasDuplicateDefinitionField = (view, projectId, field, value, excludingId = null) =>
   getDefinitionItems(view, projectId).some(
@@ -485,6 +505,7 @@ const resetDefinitionEditingState = () => {
     view: null,
     itemId: null,
   };
+  editingDeliverableTypeId = null;
   editingRuleSetId = null;
 };
 
@@ -625,6 +646,10 @@ const deleteDefinitionItem = (view, itemId) => {
     (item) => item.id !== itemId,
   );
 
+  if (view === "types" && editingDeliverableTypeId === itemId) {
+    editingDeliverableTypeId = null;
+  }
+
   if (editingDefinition.view === view && editingDefinition.itemId === itemId) {
     editingDefinition = {
       view: null,
@@ -641,6 +666,23 @@ const requestDefinitionDeletion = (view, itemId) => {
 
   if (!config || !item) {
     return;
+  }
+
+  if (view === "roles") {
+    const dependentDeliverableTypes = getDeliverableTypesUsingRole(currentProject.id, itemId);
+
+    if (dependentDeliverableTypes.length) {
+      openConfirmationModal({
+        title: "Cannot delete role",
+        message: `Remove or update ${pluralize(dependentDeliverableTypes.length, "deliverable type")} before deleting this role from ${currentProject.name}.`,
+        subject: item.name,
+        confirmLabel: "Close",
+        confirmVariant: "primary",
+        cancelHidden: true,
+        onConfirm: () => {},
+      });
+      return;
+    }
   }
 
   const deliverableReferenceFieldMap = {
@@ -1015,6 +1057,201 @@ const renderDefinitionBody = (view, project) => {
         <ol class="definition-list">
           ${listMarkup}
         </ol>
+      </section>
+    </section>
+  `;
+};
+
+const getDeliverableTypeAllocations = (deliverableType) => deliverableType?.allocations ?? [];
+
+const renderTypeAllocationRow = (allocation, index, projectId) => `
+  <div class="allocation-row" data-type-allocation-row>
+    <span class="definition-index">${String(index + 1).padStart(2, "0")}</span>
+    <label class="field rule-field">
+      <span>Role</span>
+      <select
+        data-type-allocation-role
+        ${getRoles(projectId).length ? "" : "disabled"}
+      >
+        ${renderSelectOptions(
+          getRoleOptions(projectId),
+          allocation.roleId,
+          getRoles(projectId).length ? "Select a role" : "Add a role first",
+        )}
+      </select>
+    </label>
+    <button class="definition-action" type="button" data-action="remove-type-allocation-row">
+      Remove
+    </button>
+  </div>
+`;
+
+const renderDeliverableTypeForm = ({ formId, projectId, deliverableType = null }) => {
+  const isEditing = Boolean(deliverableType);
+  const allocations = getDeliverableTypeAllocations(deliverableType).length
+    ? getDeliverableTypeAllocations(deliverableType)
+    : [createEmptyTypeAllocation()];
+
+  return `
+    <form
+      class="type-form"
+      id="${formId}"
+      ${isEditing ? `data-deliverable-type-id="${deliverableType.id}"` : ""}
+    >
+      <label class="field">
+        <span>Type name</span>
+        <input
+          type="text"
+          data-deliverable-type-name
+          value="${escapeHtml(deliverableType?.name ?? "")}"
+          placeholder="Engineering drawings"
+          autocomplete="off"
+          required
+        />
+      </label>
+
+      <div class="type-allocation-group">
+        <div class="type-allocation-group-head">
+          <p class="definition-list-title">Roles Per Deliverable Type</p>
+          <div class="type-allocation-group-tools">
+            <span class="ruleset-count-pill" data-type-allocation-count>
+              ${pluralize(allocations.length, "role")}
+            </span>
+            <button
+              class="definition-action"
+              type="button"
+              data-action="add-type-allocation-row"
+              ${getRoles(projectId).length ? "" : "disabled"}
+            >
+              Add role
+            </button>
+          </div>
+        </div>
+        <div class="type-allocation-grid" data-type-allocation-rows>
+          ${allocations.map((allocation, index) => renderTypeAllocationRow(allocation, index, projectId)).join("")}
+        </div>
+      </div>
+
+      <div class="type-form-actions">
+        <button class="primary-button" type="submit">
+          ${isEditing ? "Save type" : "Create type"}
+        </button>
+        ${
+          isEditing
+            ? `
+              <button class="definition-action" type="button" data-action="cancel-deliverable-type-edit">
+                Cancel
+              </button>
+            `
+            : ""
+        }
+      </div>
+    </form>
+  `;
+};
+
+const renderDeliverableTypeCard = (deliverableType, projectId) => {
+  if (deliverableType.id === editingDeliverableTypeId) {
+    return `
+      <article class="type-card type-card-editing">
+        ${renderDeliverableTypeForm({
+          formId: "deliverableTypeInlineEditForm",
+          projectId,
+          deliverableType,
+        })}
+      </article>
+    `;
+  }
+
+  const allocations = getDeliverableTypeAllocations(deliverableType);
+
+  return `
+    <article class="type-card">
+      <div class="type-card-head">
+        <div class="type-card-copy">
+          <h3 class="type-card-title">${escapeHtml(deliverableType.name)}</h3>
+          <p class="type-card-meta">${pluralize(allocations.length, "role")}</p>
+        </div>
+        <div class="type-card-actions">
+          <div class="definition-actions">
+            <button
+              class="definition-action"
+              type="button"
+              data-action="edit-deliverable-type"
+              data-deliverable-type-id="${deliverableType.id}"
+            >
+              Edit
+            </button>
+            <button
+              class="definition-action definition-action-danger"
+              type="button"
+              data-action="delete-deliverable-type"
+              data-deliverable-type-id="${deliverableType.id}"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <ol class="type-allocation-list">
+        ${
+          allocations.length
+            ? allocations
+                .map(
+                  (allocation, index) => `
+                    <li class="type-allocation-list-item">
+                      <span class="ruleset-rule-order">${String(index + 1).padStart(2, "0")}</span>
+                      <div class="ruleset-rule-copy">
+                        <strong>${escapeHtml(getRoleDisplayName(projectId, allocation.roleId))}</strong>
+                      </div>
+                    </li>
+                  `,
+                )
+                .join("")
+            : `
+                <li class="type-allocation-list-item">
+                  <span class="ruleset-rule-order">00</span>
+                  <div class="ruleset-rule-copy">
+                    <strong>No roles defined</strong>
+                  </div>
+                </li>
+              `
+        }
+      </ol>
+    </article>
+  `;
+};
+
+const renderDeliverableTypesBody = (project) => {
+  const deliverableTypes = getDefinitionItems("types", project.id);
+  const listMarkup = deliverableTypes.length
+    ? deliverableTypes
+        .map((deliverableType) => renderDeliverableTypeCard(deliverableType, project.id))
+        .join("")
+    : `
+        <div class="definition-empty">
+          No deliverable types yet for ${escapeHtml(project.name)}.
+        </div>
+      `;
+
+  return `
+    <section class="definition-stack">
+      <section class="definition-list-shell">
+        ${renderDeliverableTypeForm({
+          formId: "deliverableTypeCreateForm",
+          projectId: project.id,
+        })}
+      </section>
+
+      <section class="definition-list-shell">
+        <div class="definition-list-head">
+          <p class="definition-list-title">Defined types</p>
+          <span class="definition-list-count">${deliverableTypes.length}</span>
+        </div>
+        <div class="type-list">
+          ${listMarkup}
+        </div>
       </section>
     </section>
   `;
@@ -1746,7 +1983,7 @@ const viewMeta = {
   },
   types: {
     title: "Deliverable Types",
-    body: (project) => renderDefinitionBody("types", project),
+    body: (project) => renderDeliverableTypesBody(project),
   },
   "rules-of-credit": {
     title: "Lifecycle Stages",
@@ -1797,6 +2034,91 @@ const validateDefinitionForm = (form, view, projectId, excludingId = null) => {
   const config = definitionConfigs[view];
   const values = collectDefinitionFormData(form, view);
   return config.validate(values, { projectId, excludingId });
+};
+
+const collectDeliverableTypeFormData = (form) => {
+  const name = form.querySelector("[data-deliverable-type-name]")?.value.trim() ?? "";
+  const allocations = [...form.querySelectorAll("[data-type-allocation-row]")].map((row) => ({
+    roleId: row.querySelector("[data-type-allocation-role]")?.value.trim() ?? "",
+  }));
+
+  return { name, allocations };
+};
+
+const validateDeliverableTypeForm = (form, projectId, excludingId = null) => {
+  const nameInput = form.querySelector("[data-deliverable-type-name]");
+  const allocationRows = [...form.querySelectorAll("[data-type-allocation-row]")];
+  const payload = collectDeliverableTypeFormData(form);
+  const seenRoles = new Set();
+
+  if (!payload.name) {
+    return {
+      field: nameInput,
+      message: "Type name is required.",
+    };
+  }
+
+  if (hasDuplicateDefinitionField("types", projectId, "name", payload.name, excludingId)) {
+    return {
+      field: nameInput,
+      message: "A deliverable type with this name already exists in the selected project.",
+    };
+  }
+
+  if (!getRoles(projectId).length) {
+    return {
+      field: nameInput,
+      message: "Add at least one role before creating deliverable types.",
+    };
+  }
+
+  if (!allocationRows.length) {
+    return {
+      field: nameInput,
+      message: "Add at least one role.",
+    };
+  }
+
+  const allocations = [];
+
+  for (const row of allocationRows) {
+    const roleSelect = row.querySelector("[data-type-allocation-role]");
+    const roleId = roleSelect?.value.trim() ?? "";
+
+    if (!roleId) {
+      return {
+        field: roleSelect,
+        message: "Role is required.",
+      };
+    }
+
+    if (!findRole(projectId, roleId)) {
+      return {
+        field: roleSelect,
+        message: "Choose a valid role.",
+      };
+    }
+
+    if (seenRoles.has(roleId)) {
+      return {
+        field: roleSelect,
+        message: "Each role may be used only once per deliverable type.",
+      };
+    }
+
+    seenRoles.add(roleId);
+    allocations.push({
+      id: crypto.randomUUID(),
+      roleId,
+    });
+  }
+
+  return {
+    payload: {
+      name: payload.name,
+      allocations,
+    },
+  };
 };
 
 const collectRuleSetFormData = (form) => {
@@ -2063,6 +2385,151 @@ const bindDefinitionView = (view) => {
   }
 
   focusFirstField("#definitionForm [data-definition-field]");
+};
+
+const bindDeliverableTypesView = () => {
+  const createForm = document.getElementById("deliverableTypeCreateForm");
+  const inlineEditForm = document.getElementById("deliverableTypeInlineEditForm");
+  const cancelButton = workspaceBody.querySelector('[data-action="cancel-deliverable-type-edit"]');
+  const editButtons = workspaceBody.querySelectorAll('[data-action="edit-deliverable-type"]');
+  const deleteButtons = workspaceBody.querySelectorAll('[data-action="delete-deliverable-type"]');
+
+  if (!createForm && !inlineEditForm) return;
+
+  const bindDeliverableTypeForm = (form) => {
+    if (!form) return;
+
+    const rowsContainer = form.querySelector("[data-type-allocation-rows]");
+    const addAllocationButton = form.querySelector('[data-action="add-type-allocation-row"]');
+    const allocationCount = form.querySelector("[data-type-allocation-count]");
+
+    if (!rowsContainer) {
+      return;
+    }
+
+    const updateAllocationRowState = () => {
+      const rows = [...rowsContainer.querySelectorAll("[data-type-allocation-row]")];
+
+      rows.forEach((row, index) => {
+        const indexLabel = row.querySelector(".definition-index");
+        const removeButton = row.querySelector('[data-action="remove-type-allocation-row"]');
+
+        if (indexLabel) {
+          indexLabel.textContent = String(index + 1).padStart(2, "0");
+        }
+
+        if (removeButton) {
+          removeButton.disabled = rows.length === 1;
+        }
+      });
+
+      if (allocationCount) {
+        allocationCount.textContent = pluralize(rows.length, "role");
+      }
+    };
+
+    const appendAllocationRow = (allocation = createEmptyTypeAllocation()) => {
+      rowsContainer.insertAdjacentHTML(
+        "beforeend",
+        renderTypeAllocationRow(
+          allocation,
+          rowsContainer.querySelectorAll("[data-type-allocation-row]").length,
+          currentProject.id,
+        ),
+      );
+      updateAllocationRowState();
+    };
+
+    addAllocationButton?.addEventListener("click", () => {
+      appendAllocationRow();
+      rowsContainer
+        .querySelector("[data-type-allocation-row]:last-child [data-type-allocation-role]")
+        ?.focus();
+    });
+
+    rowsContainer.addEventListener("click", (event) => {
+      const removeButton = event.target.closest('[data-action="remove-type-allocation-row"]');
+
+      if (!removeButton || removeButton.disabled) {
+        return;
+      }
+
+      removeButton.closest("[data-type-allocation-row]")?.remove();
+      updateAllocationRowState();
+    });
+
+    form.addEventListener("input", (event) => {
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement
+      ) {
+        event.target.setCustomValidity("");
+      }
+    });
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const deliverableTypeId = form.dataset.deliverableTypeId ?? null;
+      const validation = validateDeliverableTypeForm(form, currentProject.id, deliverableTypeId);
+
+      if (!("payload" in validation)) {
+        showFieldError(validation.field, validation.message);
+        return;
+      }
+
+      if (deliverableTypeId) {
+        const deliverableType = getDefinitionItems("types", currentProject.id).find(
+          (item) => item.id === deliverableTypeId,
+        );
+
+        if (!deliverableType) {
+          return;
+        }
+
+        deliverableType.name = validation.payload.name;
+        deliverableType.allocations = validation.payload.allocations;
+        editingDeliverableTypeId = null;
+      } else {
+        getDefinitionItems("types", currentProject.id).push(
+          createProjectScopedEntity(currentProject.id, validation.payload),
+        );
+      }
+
+      renderView();
+    });
+
+    updateAllocationRowState();
+  };
+
+  bindDeliverableTypeForm(createForm);
+  bindDeliverableTypeForm(inlineEditForm);
+
+  cancelButton?.addEventListener("click", () => {
+    editingDeliverableTypeId = null;
+    renderView();
+  });
+
+  editButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      editingDeliverableTypeId = button.dataset.deliverableTypeId;
+      renderView();
+    });
+  });
+
+  deleteButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      requestDefinitionDeletion("types", button.dataset.deliverableTypeId);
+    });
+  });
+
+  if (inlineEditForm) {
+    focusFirstField("#deliverableTypeInlineEditForm [data-deliverable-type-name]");
+    return;
+  }
+
+  focusFirstField("#deliverableTypeCreateForm [data-deliverable-type-name]");
 };
 
 const bindRuleSetView = () => {
@@ -2538,6 +3005,11 @@ const bindProjectEditorView = () => {
 const bindViewInteractions = () => {
   if (currentView === "deliverables") {
     bindDeliverablesView();
+    return;
+  }
+
+  if (currentView === "types") {
+    bindDeliverableTypesView();
     return;
   }
 
