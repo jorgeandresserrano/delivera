@@ -1,11 +1,15 @@
 const sidebar = document.getElementById("sidebar");
+const appShell = document.querySelector(".app-shell");
 const menuToggle = document.getElementById("menuToggle");
+const sidebarCollapseButton = document.getElementById("sidebarCollapseButton");
+const sidebarCollapseIcon = document.getElementById("sidebarCollapseIcon");
 const menuItems = [...document.querySelectorAll(".menu-item")];
 const projectTrigger = document.getElementById("projectTrigger");
 const projectDropdown = document.getElementById("projectDropdown");
 const projectOptionList = document.getElementById("projectOptionList");
 const editProjectOption = document.getElementById("editProjectOption");
 const addProjectOption = document.getElementById("addProjectOption");
+const activeProjectMark = document.getElementById("activeProjectMark");
 const activeProjectName = document.getElementById("activeProjectName");
 const activeProjectCode = document.getElementById("activeProjectCode");
 const workspaceEyebrow = document.getElementById("workspaceEyebrow");
@@ -516,6 +520,7 @@ let projectEditorProjectId = null;
 let pendingConfirmationAction = null;
 let confirmationReturnFocus = null;
 let deliverableModalReturnFocus = null;
+let isDesktopSidebarCollapsed = false;
 let deliverablesTableState = {
   sortBy: "code",
   sortDirection: "asc",
@@ -987,6 +992,23 @@ const showFieldError = (field, message) => {
 const getProjectMetaLabel = (project) => {
   const codeLabel = project.code || "No code";
   return project.archived ? `${codeLabel} · Archived` : codeLabel;
+};
+
+const getProjectInitials = (project) => {
+  const codeLetters = (project.code ?? "").replace(/[^a-z]/gi, "").slice(0, 2).toUpperCase();
+
+  if (codeLetters.length >= 2) {
+    return codeLetters;
+  }
+
+  const nameInitials = (project.name ?? "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+
+  return nameInitials || "PR";
 };
 
 const renderProjectOptions = () => {
@@ -2522,10 +2544,47 @@ const renderView = () => {
   bindViewInteractions();
 };
 
-const closeSidebarOnMobile = () => {
-  if (window.innerWidth <= 760) {
+const isMobileViewport = () => window.innerWidth <= 760;
+
+const syncSidebarState = () => {
+  if (!appShell) {
+    return;
+  }
+
+  const mobileViewport = isMobileViewport();
+
+  if (!mobileViewport) {
     sidebar.classList.remove("is-open");
-    menuToggle.setAttribute("aria-expanded", "false");
+  }
+
+  appShell.classList.toggle("sidebar-collapsed", !mobileViewport && isDesktopSidebarCollapsed);
+  menuToggle.setAttribute("aria-expanded", String(sidebar.classList.contains("is-open")));
+
+  if (sidebarCollapseButton) {
+    sidebarCollapseButton.setAttribute(
+      "aria-label",
+      mobileViewport
+        ? "Close navigation menu"
+        : isDesktopSidebarCollapsed
+          ? "Expand left menu"
+          : "Collapse left menu",
+    );
+    sidebarCollapseButton.setAttribute(
+      "aria-expanded",
+      String(mobileViewport ? sidebar.classList.contains("is-open") : !isDesktopSidebarCollapsed),
+    );
+  }
+
+  if (sidebarCollapseIcon) {
+    sidebarCollapseIcon.textContent =
+      mobileViewport || !isDesktopSidebarCollapsed ? "‹" : "›";
+  }
+};
+
+const closeSidebarOnMobile = () => {
+  if (isMobileViewport()) {
+    sidebar.classList.remove("is-open");
+    syncSidebarState();
   }
 };
 
@@ -2546,8 +2605,13 @@ const openProjectDropdown = () => {
 };
 
 const syncProjectSelection = () => {
+  if (activeProjectMark) {
+    activeProjectMark.textContent = getProjectInitials(currentProject);
+  }
+
   activeProjectName.textContent = currentProject.name;
   activeProjectCode.textContent = getProjectMetaLabel(currentProject);
+  projectTrigger.title = currentProject.name;
 
   [...projectOptionList.querySelectorAll("[data-project-id]")].forEach((option) => {
     option.classList.toggle("is-selected", option.dataset.projectId === currentProject.id);
@@ -3426,12 +3490,25 @@ const bindViewInteractions = () => {
   }
 };
 
-menuToggle.setAttribute("aria-expanded", "false");
-
 menuToggle.addEventListener("click", () => {
+  if (!isMobileViewport()) {
+    return;
+  }
+
   const nextState = !sidebar.classList.contains("is-open");
   sidebar.classList.toggle("is-open", nextState);
-  menuToggle.setAttribute("aria-expanded", String(nextState));
+  syncSidebarState();
+});
+
+sidebarCollapseButton?.addEventListener("click", () => {
+  if (isMobileViewport()) {
+    sidebar.classList.remove("is-open");
+  } else {
+    isDesktopSidebarCollapsed = !isDesktopSidebarCollapsed;
+  }
+
+  closeProjectDropdown();
+  syncSidebarState();
 });
 
 projectTrigger.addEventListener("click", () => {
@@ -3537,6 +3614,20 @@ document.addEventListener("click", (event) => {
   }
 });
 
+menuItems.forEach((item) => {
+  const label = item.querySelector(".menu-item-label")?.textContent.trim();
+
+  if (label) {
+    item.setAttribute("aria-label", label);
+    item.title = label;
+  }
+});
+
+window.addEventListener("resize", () => {
+  syncSidebarState();
+});
+
+syncSidebarState();
 renderProjectOptions();
 syncProjectSelection();
 renderView();

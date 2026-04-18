@@ -13,18 +13,27 @@
         id="menuToggle"
         type="button"
         aria-controls="sidebar"
+        aria-label="Open navigation menu"
         aria-expanded="false"
       >
-        Menu
+        <span class="menu-toggle-icon" aria-hidden="true">☰</span>
       </button>
 
       <aside class="sidebar" id="sidebar">
         <div class="brand">
           <div class="brand-mark">D</div>
-          <div>
+          <div class="brand-copy">
             <p class="brand-overline">Internal tool</p>
             <h1>Delivera</h1>
           </div>
+          <button
+            class="sidebar-collapse-toggle"
+            id="sidebarCollapseButton"
+            type="button"
+            aria-label="Collapse left menu"
+          >
+            <span class="sidebar-collapse-icon" id="sidebarCollapseIcon" aria-hidden="true">‹</span>
+          </button>
         </div>
 
         <section class="project-switcher">
@@ -34,8 +43,10 @@
             id="projectTrigger"
             type="button"
             aria-haspopup="true"
+            aria-label="Select project"
             aria-expanded="false"
           >
+            <span class="project-trigger-mark" id="activeProjectMark" aria-hidden="true">NR</span>
             <span class="project-trigger-copy">
               <strong id="activeProjectName">North River Upgrade</strong>
               <span id="activeProjectCode">NRU-01</span>
@@ -90,18 +101,96 @@
 
         <section class="menu-group">
           <p class="group-label">Main</p>
-          <button class="menu-item is-active" data-view="deliverables" type="button">Deliverables</button>
+          <button class="menu-item is-active" data-view="deliverables" type="button">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none">
+                <rect x="2.5" y="2.5" width="4" height="4" rx="1"></rect>
+                <rect x="9.5" y="2.5" width="4" height="4" rx="1"></rect>
+                <rect x="2.5" y="9.5" width="4" height="4" rx="1"></rect>
+                <rect x="9.5" y="9.5" width="4" height="4" rx="1"></rect>
+              </svg>
+            </span>
+            <span class="menu-item-label">Deliverables</span>
+          </button>
         </section>
 
         <section class="menu-group">
           <p class="group-label">Definitions</p>
-          <button class="menu-item" data-view="types" type="button">Deliverable Types</button>
-          <button class="menu-item" data-view="rules-of-credit" type="button">Lifecycle Stages</button>
-          <button class="menu-item" data-view="phases" type="button">Phases</button>
-          <button class="menu-item" data-view="wbs" type="button">WBS</button>
-          <button class="menu-item" data-view="packages" type="button">Packages</button>
-          <button class="menu-item" data-view="roles" type="button">Roles</button>
-          <button class="menu-item" data-view="members" type="button">Members</button>
+          <button class="menu-item" data-view="types" type="button">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none">
+                <path d="M3 4.5h10"></path>
+                <path d="M4.5 8h7"></path>
+                <path d="M6 11.5h4"></path>
+              </svg>
+            </span>
+            <span class="menu-item-label">Deliverable Types</span>
+          </button>
+          <button class="menu-item" data-view="rules-of-credit" type="button">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none">
+                <circle cx="4" cy="4" r="1.5"></circle>
+                <circle cx="12" cy="8" r="1.5"></circle>
+                <circle cx="4" cy="12" r="1.5"></circle>
+                <path d="M5.4 4.8 10.6 7.2"></path>
+                <path d="M5.4 11.2 10.6 8.8"></path>
+              </svg>
+            </span>
+            <span class="menu-item-label">Lifecycle Stages</span>
+          </button>
+          <button class="menu-item" data-view="phases" type="button">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none">
+                <path d="M4 13.5V2.5"></path>
+                <path d="M5 3h6L9.8 5.2 11 7.5H5z"></path>
+              </svg>
+            </span>
+            <span class="menu-item-label">Phases</span>
+          </button>
+          <button class="menu-item" data-view="wbs" type="button">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none">
+                <rect x="2.5" y="2.5" width="4" height="3" rx="1"></rect>
+                <rect x="9.5" y="2.5" width="4" height="3" rx="1"></rect>
+                <rect x="9.5" y="10.5" width="4" height="3" rx="1"></rect>
+                <path d="M6.5 4h2"></path>
+                <path d="M8.5 4v8"></path>
+                <path d="M8.5 12h1"></path>
+              </svg>
+            </span>
+            <span class="menu-item-label">WBS</span>
+          </button>
+          <button class="menu-item" data-view="packages" type="button">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none">
+                <path d="M8 2.5 13 5.2v5.6L8 13.5 3 10.8V5.2z"></path>
+                <path d="M8 8.1 13 5.2"></path>
+                <path d="M8 8.1 3 5.2"></path>
+                <path d="M8 13.5V8.1"></path>
+              </svg>
+            </span>
+            <span class="menu-item-label">Packages</span>
+          </button>
+          <button class="menu-item" data-view="roles" type="button">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="5.5" r="2.5"></circle>
+                <path d="M6.3 7.6 5 13l3-1.7L11 13 9.7 7.6"></path>
+              </svg>
+            </span>
+            <span class="menu-item-label">Roles</span>
+          </button>
+          <button class="menu-item" data-view="members" type="button">
+            <span class="menu-item-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none">
+                <circle cx="6" cy="5.5" r="2"></circle>
+                <circle cx="10.5" cy="6" r="1.5"></circle>
+                <path d="M2.5 12c.6-1.8 2.2-3 4-3s3.4 1.2 4 3"></path>
+                <path d="M8.6 12c.4-1.2 1.4-2 2.6-2s2.2.8 2.7 2"></path>
+              </svg>
+            </span>
+            <span class="menu-item-label">Members</span>
+          </button>
         </section>
       </aside>
 

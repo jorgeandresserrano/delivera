@@ -11,6 +11,7 @@
   --accent: #9c5328;
   --accent-soft: rgba(156, 83, 40, 0.14);
   --sidebar-width: 214px;
+  --sidebar-width-collapsed: 76px;
   font-family: "Avenir Next", "Segoe UI", sans-serif;
 }
 
@@ -48,6 +49,7 @@ button {
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   height: 100svh;
   overflow: hidden;
+  transition: grid-template-columns 180ms ease;
 }
 
 .menu-toggle {
@@ -58,14 +60,23 @@ button {
   display: none;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
-  padding: 0 12px;
+  width: 38px;
+  height: 38px;
+  padding: 0;
   border-radius: 999px;
   background: rgba(22, 24, 29, 0.94);
   color: var(--sidebar-text);
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+}
+
+.menu-toggle-icon,
+.sidebar-collapse-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .sidebar {
@@ -74,19 +85,44 @@ button {
   gap: 18px;
   padding: 14px 12px;
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
   background: var(--sidebar);
   color: var(--sidebar-text);
   border-right: 1px solid rgba(255, 255, 255, 0.04);
+  transition: padding 180ms ease;
 }
 
 .brand {
   display: grid;
-  grid-template-columns: 34px 1fr;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   padding-bottom: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
+.sidebar-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--sidebar-muted);
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.sidebar-collapse-toggle:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--sidebar-text);
 }
 
 .brand-mark {
@@ -125,6 +161,7 @@ button {
 .project-switcher {
   display: grid;
   gap: 6px;
+  position: relative;
 }
 
 .project-trigger {
@@ -138,6 +175,20 @@ button {
   background: rgba(255, 255, 255, 0.04);
   color: rgba(243, 238, 228, 0.96);
   transition: background-color 140ms ease;
+}
+
+.project-trigger-mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: rgba(156, 83, 40, 0.2);
+  color: #fff5ea;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
 }
 
 .project-trigger:hover {
@@ -183,12 +234,19 @@ button {
 }
 
 .project-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 12;
   display: grid;
   gap: 4px;
+  width: max(100%, 232px);
+  max-width: min(280px, calc(100vw - 24px));
   padding: 6px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   background: rgba(12, 14, 18, 0.62);
+  box-shadow: 0 20px 48px rgba(6, 8, 12, 0.28);
 }
 
 .project-option-list {
@@ -251,7 +309,8 @@ button {
 .menu-item {
   display: flex;
   align-items: center;
-  min-height: 30px;
+  gap: 10px;
+  min-height: 38px;
   padding: 0 10px;
   border-radius: 9px;
   text-align: left;
@@ -268,6 +327,28 @@ button {
 .menu-item.is-active {
   background: var(--accent-soft);
   color: #fff8f0;
+}
+
+.menu-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.menu-item-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.menu-item-label {
+  min-width: 0;
 }
 
 .workspace {
@@ -333,6 +414,57 @@ button {
   padding: 14px 16px;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+@media (min-width: 761px) {
+  .app-shell.sidebar-collapsed {
+    grid-template-columns: var(--sidebar-width-collapsed) minmax(0, 1fr);
+  }
+
+  .app-shell.sidebar-collapsed .sidebar {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .app-shell.sidebar-collapsed .brand {
+    grid-template-columns: 34px auto;
+  }
+
+  .app-shell.sidebar-collapsed .brand-copy,
+  .app-shell.sidebar-collapsed .group-label,
+  .app-shell.sidebar-collapsed .menu-item-label,
+  .app-shell.sidebar-collapsed .project-trigger-copy {
+    display: none;
+  }
+
+  .app-shell.sidebar-collapsed .menu-group {
+    gap: 8px;
+  }
+
+  .app-shell.sidebar-collapsed .project-switcher {
+    gap: 10px;
+  }
+
+  .app-shell.sidebar-collapsed .project-trigger {
+    padding: 0 8px;
+    gap: 6px;
+  }
+
+  .app-shell.sidebar-collapsed .project-dropdown {
+    top: 0;
+    left: calc(100% + 10px);
+  }
+
+  .app-shell.sidebar-collapsed .menu-item {
+    justify-content: center;
+    min-height: 42px;
+    padding: 0;
+  }
+
+  .app-shell.sidebar-collapsed .menu-item-icon {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 .project-form {
@@ -1123,6 +1255,7 @@ button {
     inset: 0 auto 0 0;
     width: min(240px, 84vw);
     z-index: 18;
+    overflow: visible;
     transform: translateX(-100%);
     transition: transform 180ms ease;
   }
