@@ -44,6 +44,8 @@ const createProjectState = () => ({
   phases: [],
   wbs: [],
   packages: [],
+  roles: [],
+  members: [],
   ruleSets: [],
 });
 
@@ -251,6 +253,116 @@ const definitionConfigs = {
       };
     },
   },
+  roles: {
+    singular: "role",
+    plural: "roles",
+    createLabel: "Add role",
+    editLabel: "Save role",
+    inlineEdit: true,
+    listTitle: "Defined roles",
+    emptyMessage: (project) => `No roles yet for ${project.name}.`,
+    getDisplayName: (item) => item.name,
+    fields: [
+      {
+        key: "name",
+        label: "Role name",
+        placeholder: "Project manager",
+        required: true,
+      },
+    ],
+    renderSummary: (item) => `<strong>${escapeHtml(item.name)}</strong>`,
+    validate(values, { projectId, excludingId }) {
+      if (!values.name) {
+        return {
+          field: "name",
+          message: "Role name is required.",
+        };
+      }
+
+      if (hasDuplicateDefinitionField("roles", projectId, "name", values.name, excludingId)) {
+        return {
+          field: "name",
+          message: "A role with this name already exists in the selected project.",
+        };
+      }
+
+      return {
+        payload: {
+          name: values.name,
+        },
+      };
+    },
+  },
+  members: {
+    singular: "member",
+    plural: "members",
+    createLabel: "Add member",
+    editLabel: "Save member",
+    inlineEdit: true,
+    listTitle: "Defined members",
+    emptyMessage: (project) => `No members yet for ${project.name}.`,
+    getDisplayName: (item, { projectId }) => `${item.name} · ${getRoleDisplayName(projectId, item.roleId)}`,
+    fields: [
+      {
+        key: "name",
+        label: "Member name",
+        placeholder: "Jamie Chen",
+        required: true,
+      },
+      {
+        key: "roleId",
+        label: "Role",
+        type: "select",
+        required: true,
+        options: ({ projectId }) => getRoleOptions(projectId),
+        placeholderOption: ({ projectId }) =>
+          getRoles(projectId).length ? "Select a role" : "Add a role first",
+        isDisabled: ({ projectId }) => !getRoles(projectId).length,
+      },
+    ],
+    renderSummary: (item, { projectId }) => `
+      <div class="definition-copy-stack">
+        <strong>${escapeHtml(item.name)}</strong>
+        <span>${escapeHtml(getRoleDisplayName(projectId, item.roleId))}</span>
+      </div>
+    `,
+    validate(values, { projectId }) {
+      if (!values.name) {
+        return {
+          field: "name",
+          message: "Member name is required.",
+        };
+      }
+
+      if (!getRoles(projectId).length) {
+        return {
+          field: "roleId",
+          message: "Add at least one role before creating members.",
+        };
+      }
+
+      if (!values.roleId) {
+        return {
+          field: "roleId",
+          message: "Role is required.",
+        };
+      }
+
+      if (!findRole(projectId, values.roleId)) {
+        return {
+          field: "roleId",
+          message: "Choose a valid role.",
+        };
+      }
+
+      return {
+        payload: {
+          name: values.name,
+          roleId: values.roleId,
+        },
+      };
+    },
+  },
 };
 
 let currentProject = projects[0];
@@ -276,11 +388,28 @@ const getDefinitionItems = (view, projectId) => getProjectState(projectId)[view]
 
 const getRuleSets = (projectId) => getProjectState(projectId).ruleSets;
 
+const getRoles = (projectId) => getProjectState(projectId).roles;
+
+const getMembers = (projectId) => getProjectState(projectId).members;
+
 const findDefinitionItem = (view, projectId, itemId) =>
   getDefinitionItems(view, projectId).find((item) => item.id === itemId);
 
 const findRuleSet = (projectId, ruleSetId) =>
   getRuleSets(projectId).find((item) => item.id === ruleSetId);
+
+const findRole = (projectId, roleId) => getRoles(projectId).find((item) => item.id === roleId);
+
+const getRoleOptions = (projectId) =>
+  getRoles(projectId).map((role) => ({
+    value: role.id,
+    label: role.name,
+  }));
+
+const getRoleDisplayName = (projectId, roleId) => findRole(projectId, roleId)?.name ?? "Unknown role";
+
+const getMembersForRole = (projectId, roleId) =>
+  getMembers(projectId).filter((member) => member.roleId === roleId);
 
 const hasDuplicateDefinitionField = (view, projectId, field, value, excludingId = null) =>
   getDefinitionItems(view, projectId).some(
@@ -342,7 +471,20 @@ const closeConfirmationModal = ({ restoreFocus = true } = {}) => {
   }
 };
 
-const openConfirmationModal = ({ title, message, subject, confirmLabel = "Delete", onConfirm }) => {
+const setConfirmationConfirmVariant = (variant = "danger") => {
+  confirmationDialogConfirm.classList.toggle("definition-action-danger-fill", variant === "danger");
+  confirmationDialogConfirm.classList.toggle("definition-action-primary", variant === "primary");
+};
+
+const openConfirmationModal = ({
+  title,
+  message,
+  subject,
+  confirmLabel = "Delete",
+  confirmVariant = "danger",
+  cancelHidden = false,
+  onConfirm,
+}) => {
   pendingConfirmationAction = onConfirm;
   confirmationReturnFocus =
     document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -351,13 +493,15 @@ const openConfirmationModal = ({ title, message, subject, confirmLabel = "Delete
   confirmationDialogMessage.textContent = message;
   confirmationDialogSubject.textContent = subject;
   confirmationDialogConfirm.textContent = confirmLabel;
+  confirmationDialogCancel.hidden = cancelHidden;
+  setConfirmationConfirmVariant(confirmVariant);
   confirmationModal.hidden = false;
   document.body.classList.add("has-modal-open");
   closeProjectDropdown();
   closeSidebarOnMobile();
 
   requestAnimationFrame(() => {
-    confirmationDialogCancel.focus();
+    (cancelHidden ? confirmationDialogConfirm : confirmationDialogCancel).focus();
   });
 };
 
@@ -384,10 +528,27 @@ const requestDefinitionDeletion = (view, itemId) => {
     return;
   }
 
+  if (view === "roles") {
+    const membersUsingRole = getMembersForRole(currentProject.id, itemId);
+
+    if (membersUsingRole.length) {
+      openConfirmationModal({
+        title: "Cannot delete role",
+        message: `Reassign or remove ${pluralize(membersUsingRole.length, "member")} before deleting this role from ${currentProject.name}.`,
+        subject: item.name,
+        confirmLabel: "Close",
+        confirmVariant: "primary",
+        cancelHidden: true,
+        onConfirm: () => {},
+      });
+      return;
+    }
+  }
+
   openConfirmationModal({
     title: `Delete ${config.singular}?`,
     message: `This will remove it from ${currentProject.name}. This action cannot be undone in this prototype.`,
-    subject: config.getDisplayName(item),
+    subject: config.getDisplayName(item, { projectId: currentProject.id }),
     onConfirm: () => {
       deleteDefinitionItem(view, itemId);
     },
@@ -489,13 +650,41 @@ const renderProjectOptions = () => {
     .join("");
 };
 
-const renderDefinitionField = (field, value = "") => {
+const getDefinitionFieldOptions = (field, projectId) => {
+  if (typeof field.options === "function") {
+    return field.options({ projectId });
+  }
+
+  return field.options ?? [];
+};
+
+const getDefinitionFieldPlaceholder = (field, projectId) => {
+  if (typeof field.placeholderOption === "function") {
+    return field.placeholderOption({ projectId });
+  }
+
+  return field.placeholderOption ?? null;
+};
+
+const isDefinitionFieldDisabled = (field, projectId) => {
+  if (typeof field.isDisabled === "function") {
+    return field.isDisabled({ projectId });
+  }
+
+  return Boolean(field.disabled);
+};
+
+const renderDefinitionField = (field, value = "", { projectId } = {}) => {
   const escapedValue = escapeHtml(value);
   const requiredAttribute = field.required ? "required" : "";
   const placeholderAttribute = field.placeholder
     ? `placeholder="${escapeHtml(field.placeholder)}"`
     : "";
+  const disabledAttribute = isDefinitionFieldDisabled(field, projectId) ? "disabled" : "";
   const rows = field.rows ?? 3;
+  const options = field.type === "select" ? getDefinitionFieldOptions(field, projectId) : [];
+  const placeholderOption =
+    field.type === "select" ? getDefinitionFieldPlaceholder(field, projectId) : null;
 
   return `
     <label class="field${field.fullWidth ? " field-full" : ""}">
@@ -508,8 +697,36 @@ const renderDefinitionField = (field, value = "") => {
               ${placeholderAttribute}
               rows="${rows}"
               ${requiredAttribute}
+              ${disabledAttribute}
             >${escapedValue}</textarea>
           `
+          : field.type === "select"
+            ? `
+              <select
+                data-definition-field="${field.key}"
+                ${requiredAttribute}
+                ${disabledAttribute}
+              >
+                ${
+                  placeholderOption
+                    ? `
+                      <option value="" ${value ? "" : "selected"}>
+                        ${escapeHtml(placeholderOption)}
+                      </option>
+                    `
+                    : ""
+                }
+                ${options
+                  .map(
+                    (option) => `
+                      <option value="${escapeHtml(option.value)}" ${option.value === value ? "selected" : ""}>
+                        ${escapeHtml(option.label)}
+                      </option>
+                    `,
+                  )
+                  .join("")}
+              </select>
+            `
           : `
             <input
               data-definition-field="${field.key}"
@@ -518,6 +735,7 @@ const renderDefinitionField = (field, value = "") => {
               ${placeholderAttribute}
               autocomplete="off"
               ${requiredAttribute}
+              ${disabledAttribute}
             />
           `
       }
@@ -525,7 +743,7 @@ const renderDefinitionField = (field, value = "") => {
   `;
 };
 
-const renderDefinitionForm = (view, item = null) => {
+const renderDefinitionForm = (view, item = null, projectId = currentProject.id) => {
   const config = definitionConfigs[view];
   const values = item ?? {};
   const isEditing = Boolean(item);
@@ -539,7 +757,9 @@ const renderDefinitionForm = (view, item = null) => {
       ${isEditing ? `data-item-id="${item.id}"` : ""}
     >
       <div class="definition-form-grid${gridClass}">
-        ${config.fields.map((field) => renderDefinitionField(field, values[field.key] ?? "")).join("")}
+        ${config.fields
+          .map((field) => renderDefinitionField(field, values[field.key] ?? "", { projectId }))
+          .join("")}
       </div>
       <div class="definition-form-actions">
         <button class="primary-button" type="submit">
@@ -559,7 +779,7 @@ const renderDefinitionForm = (view, item = null) => {
   `;
 };
 
-const renderDefinitionInlineEditForm = (view, item, index) => {
+const renderDefinitionInlineEditForm = (view, item, index, projectId = currentProject.id) => {
   const config = definitionConfigs[view];
   const gridClass = config.fields.length === 1 ? " definition-inline-grid-single" : "";
 
@@ -573,7 +793,9 @@ const renderDefinitionInlineEditForm = (view, item, index) => {
       >
         <span class="definition-index">${String(index + 1).padStart(2, "0")}</span>
         <div class="definition-inline-grid${gridClass}">
-          ${config.fields.map((field) => renderDefinitionField(field, item[field.key] ?? "")).join("")}
+          ${config.fields
+            .map((field) => renderDefinitionField(field, item[field.key] ?? "", { projectId }))
+            .join("")}
         </div>
         <div class="definition-actions">
           <button class="definition-action definition-action-primary" type="submit">
@@ -601,12 +823,12 @@ const renderDefinitionBody = (view, project) => {
         .map(
           (item, index) =>
             config.inlineEdit && editingItem?.id === item.id
-              ? renderDefinitionInlineEditForm(view, item, index)
+              ? renderDefinitionInlineEditForm(view, item, index, project.id)
               : `
                   <li class="definition-row">
                     <span class="definition-index">${String(index + 1).padStart(2, "0")}</span>
                     <div class="definition-copy">
-                      ${config.renderSummary(item)}
+                      ${config.renderSummary(item, { projectId: project.id })}
                     </div>
                     <div class="definition-actions">
                       <button
@@ -640,7 +862,7 @@ const renderDefinitionBody = (view, project) => {
 
   return `
     <section class="definition-stack">
-      ${renderDefinitionForm(view, config.inlineEdit ? null : editingItem)}
+      ${renderDefinitionForm(view, config.inlineEdit ? null : editingItem, project.id)}
 
       <section class="definition-list-shell">
         <div class="definition-list-head">
@@ -924,12 +1146,20 @@ const viewMeta = {
     title: "Packages",
     body: (project) => renderDefinitionBody("packages", project),
   },
+  roles: {
+    title: "Roles",
+    body: (project) => renderDefinitionBody("roles", project),
+  },
+  members: {
+    title: "Members",
+    body: (project) => renderDefinitionBody("members", project),
+  },
   "project-editor": {
     title: () => (projectEditorProjectId ? "Edit project" : "New project"),
     copy: () =>
       projectEditorProjectId
         ? "Update the selected project's name, code, or status. Deletion removes its project-scoped data."
-        : "Create a project record first, then define its phases, WBS items, packages, deliverable types, and rules of credit.",
+        : "Create a project record first, then define its phases, WBS items, packages, roles, members, deliverable types, and rules of credit.",
     eyebrow: "Projects",
     body: () => renderProjectEditorBody(),
   },
