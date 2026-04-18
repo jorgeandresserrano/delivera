@@ -550,7 +550,12 @@ const getDeliverables = (projectId) => getProjectState(projectId).deliverables;
 
 const getRoles = (projectId) => getProjectState(projectId).roles;
 
+const getMembers = (projectId) => getProjectState(projectId).members;
+
 const findRole = (projectId, roleId) => getRoles(projectId).find((item) => item.id === roleId);
+
+const findMember = (projectId, memberId) =>
+  getMembers(projectId).find((item) => item.id === memberId);
 
 const findDefinitionItem = (view, projectId, itemId) =>
   getDefinitionItems(view, projectId).find((item) => item.id === itemId);
@@ -578,6 +583,12 @@ const getRoleOptions = (projectId) =>
     label: role.name,
   }));
 
+const getMemberOptions = (projectId) =>
+  getMembers(projectId).map((member) => ({
+    value: member.id,
+    label: member.name,
+  }));
+
 const getRoleDisplayName = (projectId, roleId) => findRole(projectId, roleId)?.name ?? "Unknown role";
 
 const getDefinitionOptions = (view, projectId) =>
@@ -602,6 +613,30 @@ const getDeliverableTypesUsingRole = (projectId, roleId) =>
   getDefinitionItems("types", projectId).filter((deliverableType) =>
     (deliverableType.allocations ?? []).some((allocation) => allocation.roleId === roleId),
   );
+
+const getDeliverableTypeAssignmentTemplates = (projectId, typeId) => {
+  const deliverableType = findDefinitionItem("types", projectId, typeId);
+
+  if (!deliverableType) {
+    return [];
+  }
+
+  return getDeliverableTypeAllocations(deliverableType)
+    .map((allocation, index) => {
+      const role = findRole(projectId, allocation.roleId);
+
+      if (!role) {
+        return null;
+      }
+
+      return {
+        order: index,
+        roleId: role.id,
+        roleName: role.name,
+      };
+    })
+    .filter(Boolean);
+};
 
 const hasDuplicateDefinitionField = (view, projectId, field, value, excludingId = null) =>
   getDefinitionItems(view, projectId).some(
@@ -1642,6 +1677,10 @@ const getMissingDeliverableRequirements = (projectId) => {
       label: "WBS item",
       isMissing: !getDefinitionItems("wbs", projectId).length,
     },
+    {
+      label: "member",
+      isMissing: !getMembers(projectId).length,
+    },
   ];
 
   return requirements.filter((requirement) => requirement.isMissing).map((requirement) => requirement.label);
@@ -1815,6 +1854,94 @@ const renderDeliverableSelectField = ({
   </label>
 `;
 
+const renderDeliverableAssignmentSection = (
+  projectId,
+  typeId = "",
+  selectedAssignments = new Map(),
+) => {
+  const deliverableType = findDefinitionItem("types", projectId, typeId);
+  const assignmentTemplates = getDeliverableTypeAssignmentTemplates(projectId, typeId);
+  const memberOptions = getMemberOptions(projectId);
+
+  if (!deliverableType) {
+    return `
+      <section class="deliverable-assignment-group">
+        <div class="deliverable-assignment-head">
+          <div class="deliverable-assignment-copy">
+            <p class="definition-list-title">Team assignments</p>
+            <p class="deliverable-assignment-description">
+              Select a deliverable type to load its required assignment roles.
+            </p>
+          </div>
+        </div>
+        <p class="deliverable-assignment-note">
+          Choose a deliverable type before assigning project members.
+        </p>
+      </section>
+    `;
+  }
+
+  if (!memberOptions.length) {
+    return `
+      <section class="deliverable-assignment-group">
+        <div class="deliverable-assignment-head">
+          <div class="deliverable-assignment-copy">
+            <p class="definition-list-title">Team assignments</p>
+            <p class="deliverable-assignment-description">
+              ${escapeHtml(deliverableType.name)} requires one project member for each role.
+            </p>
+          </div>
+          <span class="ruleset-count-pill">${pluralize(assignmentTemplates.length, "role")}</span>
+        </div>
+        <p class="deliverable-assignment-note">
+          Add project members before creating a deliverable of this type.
+        </p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="deliverable-assignment-group">
+      <div class="deliverable-assignment-head">
+        <div class="deliverable-assignment-copy">
+          <p class="definition-list-title">Team assignments</p>
+          <p class="deliverable-assignment-description">
+            Assign one project member to each role required by ${escapeHtml(deliverableType.name)}.
+          </p>
+        </div>
+        <span class="ruleset-count-pill">${pluralize(assignmentTemplates.length, "role")}</span>
+      </div>
+      <div class="deliverable-assignment-grid">
+        ${assignmentTemplates
+          .map(
+            (assignment) => `
+              <div class="deliverable-assignment-row" data-deliverable-assignment-row data-role-id="${escapeHtml(assignment.roleId)}">
+                <div class="deliverable-assignment-role">
+                  <span class="ruleset-rule-order">${String(assignment.order + 1).padStart(2, "0")}</span>
+                  <div class="deliverable-assignment-role-copy">
+                    <strong>${escapeHtml(assignment.roleName)}</strong>
+                    <span>Required role</span>
+                  </div>
+                </div>
+                <label class="field">
+                  <span>Project member</span>
+                  <select data-deliverable-assignment-member required>
+                    ${renderSelectOptions(
+                      memberOptions,
+                      selectedAssignments.get(assignment.roleId) ?? "",
+                      "Select a member",
+                    )}
+                  </select>
+                </label>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+};
+
 const renderDeliverableForm = (project) => `
   <form class="deliverable-form" id="deliverableForm">
     <div class="deliverable-form-grid">
@@ -1874,6 +2001,9 @@ const renderDeliverableForm = (project) => `
         options: getDefinitionOptions("packages", project.id),
         placeholderLabel: "No package",
       })}
+    </div>
+    <div data-deliverable-assignment-region>
+      ${renderDeliverableAssignmentSection(project.id)}
     </div>
     <div class="deliverable-form-actions">
       <button class="definition-action" type="button" data-action="cancel-deliverable-modal">
@@ -2814,6 +2944,10 @@ const collectDeliverableFormData = (form) => ({
   phaseId: form.querySelector('[data-deliverable-field="phaseId"]')?.value.trim() ?? "",
   wbsId: form.querySelector('[data-deliverable-field="wbsId"]')?.value.trim() ?? "",
   packageId: form.querySelector('[data-deliverable-field="packageId"]')?.value.trim() ?? "",
+  assignments: [...form.querySelectorAll("[data-deliverable-assignment-row]")].map((row) => ({
+    roleId: row.dataset.roleId ?? "",
+    memberId: row.querySelector("[data-deliverable-assignment-member]")?.value.trim() ?? "",
+  })),
 });
 
 const validateDeliverableForm = (form, projectId) => {
@@ -2853,6 +2987,13 @@ const validateDeliverableForm = (form, projectId) => {
     };
   }
 
+  if (!getMembers(projectId).length) {
+    return {
+      field: "typeId",
+      message: "Add at least one member before creating deliverables.",
+    };
+  }
+
   if (!findRuleSet(projectId, values.ruleSetId)) {
     return {
       field: "ruleSetId",
@@ -2881,6 +3022,69 @@ const validateDeliverableForm = (form, projectId) => {
     };
   }
 
+  const requiredAssignments = getDeliverableTypeAssignmentTemplates(projectId, values.typeId);
+  const assignmentRows = [...form.querySelectorAll("[data-deliverable-assignment-row]")];
+  const deliverableType = findDefinitionItem("types", projectId, values.typeId);
+
+  if (
+    getDeliverableTypeAllocations(deliverableType).length !== requiredAssignments.length ||
+    !requiredAssignments.length
+  ) {
+    return {
+      field: "typeId",
+      message: "This deliverable type has invalid assignment roles. Update the type and try again.",
+    };
+  }
+
+  if (assignmentRows.length !== requiredAssignments.length) {
+    return {
+      field: "typeId",
+      message: "Refresh the team assignments for the selected deliverable type.",
+    };
+  }
+
+  const assignments = [];
+
+  for (const [index, row] of assignmentRows.entries()) {
+    const roleId = row.dataset.roleId ?? "";
+    const memberSelect = row.querySelector("[data-deliverable-assignment-member]");
+    const memberId = memberSelect?.value.trim() ?? "";
+    const role = findRole(projectId, roleId);
+
+    if (!role) {
+      return {
+        field: "typeId",
+        message: "This deliverable type contains an invalid role. Update the type and try again.",
+      };
+    }
+
+    if (!memberId) {
+      return {
+        field: memberSelect,
+        message: `Select a project member for ${role.name}.`,
+      };
+    }
+
+    const member = findMember(projectId, memberId);
+
+    if (!member) {
+      return {
+        field: memberSelect,
+        message: `Choose a valid project member for ${role.name}.`,
+      };
+    }
+
+    // Snapshot the chosen assignment so later definition edits do not rewrite existing deliverables.
+    assignments.push({
+      id: crypto.randomUUID(),
+      roleId: role.id,
+      roleName: role.name,
+      memberId: member.id,
+      memberName: member.name,
+      order: index,
+    });
+  }
+
   return {
     payload: {
       code: values.code,
@@ -2889,8 +3093,42 @@ const validateDeliverableForm = (form, projectId) => {
       phaseId: values.phaseId,
       wbsId: values.wbsId,
       packageId: values.packageId || null,
+      assignments,
     },
   };
+};
+
+const collectDeliverableAssignmentSelections = (form) =>
+  new Map(
+    [...form.querySelectorAll("[data-deliverable-assignment-row]")]
+      .map((row) => [
+        row.dataset.roleId ?? "",
+        row.querySelector("[data-deliverable-assignment-member]")?.value.trim() ?? "",
+      ])
+      .filter(([roleId]) => roleId),
+  );
+
+const syncDeliverableAssignmentSection = (
+  form,
+  projectId,
+  { focusFirstAssignment = false } = {},
+) => {
+  const assignmentRegion = form.querySelector("[data-deliverable-assignment-region]");
+  const typeId = form.querySelector('[data-deliverable-field="typeId"]')?.value.trim() ?? "";
+
+  if (!assignmentRegion) {
+    return;
+  }
+
+  assignmentRegion.innerHTML = renderDeliverableAssignmentSection(
+    projectId,
+    typeId,
+    collectDeliverableAssignmentSelections(form),
+  );
+
+  if (focusFirstAssignment) {
+    assignmentRegion.querySelector("[data-deliverable-assignment-member]")?.focus();
+  }
 };
 
 const bindDeliverablesTableControls = () => {
@@ -2985,6 +3223,8 @@ const bindDeliverableForm = (form) => {
     return;
   }
 
+  const typeSelect = form.querySelector('[data-deliverable-field="typeId"]');
+
   form.addEventListener("input", (event) => {
     if (
       event.target instanceof HTMLInputElement ||
@@ -2995,13 +3235,32 @@ const bindDeliverableForm = (form) => {
     }
   });
 
+  form.addEventListener("change", (event) => {
+    if (
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLTextAreaElement ||
+      event.target instanceof HTMLSelectElement
+    ) {
+      event.target.setCustomValidity("");
+    }
+
+    if (event.target === typeSelect) {
+      syncDeliverableAssignmentSection(form, currentProject.id, {
+        focusFirstAssignment: true,
+      });
+    }
+  });
+
   form.addEventListener("submit", (event) => {
     event.preventDefault();
 
     const validation = validateDeliverableForm(form, currentProject.id);
 
     if (!("payload" in validation)) {
-      const field = form.querySelector(`[data-deliverable-field="${validation.field}"]`);
+      const field =
+        validation.field instanceof HTMLElement
+          ? validation.field
+          : form.querySelector(`[data-deliverable-field="${validation.field}"]`);
       showFieldError(field, validation.message);
       return;
     }

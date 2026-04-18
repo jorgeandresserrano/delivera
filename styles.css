@@ -603,6 +603,59 @@ button {
   gap: 14px;
 }
 
+.deliverable-assignment-group {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(244, 241, 234, 0.42);
+}
+
+.deliverable-assignment-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.deliverable-assignment-copy,
+.deliverable-assignment-role-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.deliverable-assignment-description,
+.deliverable-assignment-note,
+.deliverable-assignment-role-copy span {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.deliverable-assignment-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.deliverable-assignment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  gap: 12px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fffdfa;
+}
+
+.deliverable-assignment-role {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
 .deliverable-form-actions,
 .deliverables-table-head {
   display: flex;
@@ -1090,9 +1143,14 @@ button {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .deliverable-assignment-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .deliverable-form-actions,
   .deliverables-table-head,
-  .deliverable-modal-head {
+  .deliverable-modal-head,
+  .deliverable-assignment-head {
     align-items: stretch;
     flex-direction: column;
   }

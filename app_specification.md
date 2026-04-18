@@ -218,6 +218,7 @@ That means:
 - roles are not hardcoded in the schema
 - each deliverable type defines its own required assignment slots
 - when a deliverable is created, those role templates are instantiated onto the deliverable as assignment rows
+- the creator selects one project member for each required role when creating the deliverable
 - assignment rows snapshot the role key, label, and order so later template changes do not rewrite existing deliverables
 
 Example role templates:
@@ -402,7 +403,7 @@ Delivera is a secure, relational, project-based application where:
 - lifecycle stage sets define ordered stage templates and never store dates
 - each deliverable owns instantiated stage records with expected dates, actual dates, and explicit status
 - the current stage is derived from those stage records
-- assignment roles and member counts are configurable per deliverable type and instantiated per deliverable
+- assignment roles are configurable per deliverable type and instantiated as project-member assignments per deliverable
 - follow-up comments are logged chronologically
 - a full audit trail captures important changes over time
 - users are authenticated through a single users model with simple owner/viewer permissions
