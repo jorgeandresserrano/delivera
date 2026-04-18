@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Delivera</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <button
+        class="menu-toggle"
+        id="menuToggle"
+        type="button"
+        aria-controls="sidebar"
+        aria-expanded="false"
+      >
+        Menu
+      </button>
+
+      <aside class="sidebar" id="sidebar">
+        <div class="brand">
+          <div class="brand-mark">D</div>
+          <div>
+            <p class="brand-overline">Internal tool</p>
+            <h1>Delivera</h1>
+          </div>
+        </div>
+
+        <section class="project-switcher">
+          <p class="group-label">Project</p>
+          <button
+            class="project-trigger"
+            id="projectTrigger"
+            type="button"
+            aria-haspopup="true"
+            aria-expanded="false"
+          >
+            <span class="project-trigger-copy">
+              <strong id="activeProjectName">North River Upgrade</strong>
+              <span id="activeProjectCode">NRU-01</span>
+            </span>
+            <span class="project-trigger-icon" aria-hidden="true">▾</span>
+          </button>
+
+          <div class="project-dropdown" id="projectDropdown" hidden>
+            <div class="project-option-list" id="projectOptionList">
+              <button
+                class="project-option is-selected"
+                type="button"
+                data-project-id="north-river"
+                data-project-name="North River Upgrade"
+                data-project-code="NRU-01"
+              >
+                <strong>North River Upgrade</strong>
+                <span>NRU-01</span>
+              </button>
+              <button
+                class="project-option"
+                type="button"
+                data-project-id="west-annex"
+                data-project-name="West Annex Retrofit"
+                data-project-code="WAR-04"
+              >
+                <strong>West Annex Retrofit</strong>
+                <span>WAR-04</span>
+              </button>
+              <button
+                class="project-option"
+                type="button"
+                data-project-id="ore-handling"
+                data-project-name="Ore Handling Expansion"
+                data-project-code="OHE-02"
+              >
+                <strong>Ore Handling Expansion</strong>
+                <span>OHE-02</span>
+              </button>
+            </div>
+            <div class="project-divider"></div>
+            <button class="project-option project-option-add" id="addProjectOption" type="button">
+              <strong>Add project</strong>
+              <span>Create a new project</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="menu-group">
+          <p class="group-label">Main</p>
+          <button class="menu-item is-active" data-view="deliverables" type="button">Deliverables</button>
+        </section>
+
+        <section class="menu-group">
+          <p class="group-label">Definitions</p>
+          <button class="menu-item" data-view="types" type="button">Deliverable Types</button>
+          <button class="menu-item" data-view="rules-of-credit" type="button">Rules of Credit</button>
+          <button class="menu-item" data-view="phases" type="button">Phases</button>
+          <button class="menu-item" data-view="wbs" type="button">WBS</button>
+          <button class="menu-item" data-view="packages" type="button">Packages</button>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <section class="workspace-panel">
+          <p class="workspace-eyebrow" id="workspaceEyebrow">North River Upgrade</p>
+          <h2 class="workspace-title" id="workspaceTitle">Deliverables</h2>
+          <p class="workspace-copy" id="workspaceCopy">
+            Project-scoped lifecycle tracking lives here.
+          </p>
+          <div class="workspace-body" id="workspaceBody"></div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

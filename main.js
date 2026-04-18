@@ -1,0 +1,1306 @@
+const sidebar = document.getElementById("sidebar");
+const menuToggle = document.getElementById("menuToggle");
+const menuItems = [...document.querySelectorAll(".menu-item")];
+const projectTrigger = document.getElementById("projectTrigger");
+const projectDropdown = document.getElementById("projectDropdown");
+const projectOptionList = document.getElementById("projectOptionList");
+const addProjectOption = document.getElementById("addProjectOption");
+const activeProjectName = document.getElementById("activeProjectName");
+const activeProjectCode = document.getElementById("activeProjectCode");
+const workspaceEyebrow = document.getElementById("workspaceEyebrow");
+const workspaceTitle = document.getElementById("workspaceTitle");
+const workspaceCopy = document.getElementById("workspaceCopy");
+const workspaceBody = document.getElementById("workspaceBody");
+
+const escapeHtml = (value = "") =>
+  String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+const normalizeValue = (value = "") => value.trim().toLowerCase();
+
+const pluralize = (count, singular, plural = `${singular}s`) =>
+  `${count} ${count === 1 ? singular : plural}`;
+
+const createProjectFromOption = (option) => ({
+  id: option.dataset.projectId,
+  name: option.dataset.projectName,
+  code: option.dataset.projectCode ?? "",
+  archived: option.dataset.projectArchived === "true",
+});
+
+const createProjectState = () => ({
+  types: [],
+  phases: [],
+  wbs: [],
+  packages: [],
+  ruleSets: [],
+});
+
+const createEmptyStage = () => ({
+  name: "",
+});
+
+let projects = [...projectOptionList.querySelectorAll("[data-project-id]")].map((option) =>
+  createProjectFromOption(option),
+);
+
+const projectStateStore = Object.fromEntries(
+  projects.map((project) => [project.id, createProjectState()]),
+);
+
+const definitionConfigs = {
+  types: {
+    singular: "deliverable type",
+    plural: "deliverable types",
+    createLabel: "Add type",
+    editLabel: "Save type",
+    inlineEdit: true,
+    listTitle: "Defined types",
+    emptyMessage: (project) => `No deliverable types yet for ${project.name}.`,
+    fields: [
+      {
+        key: "name",
+        label: "Type name",
+        placeholder: "Engineering drawings",
+        required: true,
+      },
+    ],
+    renderSummary: (item) => `<strong>${escapeHtml(item.name)}</strong>`,
+    validate(values, { projectId, excludingId }) {
+      if (!values.name) {
+        return {
+          field: "name",
+          message: "Type name is required.",
+        };
+      }
+
+      if (hasDuplicateDefinitionField("types", projectId, "name", values.name, excludingId)) {
+        return {
+          field: "name",
+          message: "A deliverable type with this name already exists in the selected project.",
+        };
+      }
+
+      return {
+        payload: {
+          name: values.name,
+        },
+      };
+    },
+  },
+  phases: {
+    singular: "project phase",
+    plural: "project phases",
+    createLabel: "Add phase",
+    editLabel: "Save phase",
+    inlineEdit: true,
+    listTitle: "Defined phases",
+    emptyMessage: (project) => `No project phases yet for ${project.name}.`,
+    fields: [
+      {
+        key: "name",
+        label: "Phase name",
+        placeholder: "Detailed engineering",
+        required: true,
+      },
+    ],
+    renderSummary: (item) => `<strong>${escapeHtml(item.name)}</strong>`,
+    validate(values, { projectId, excludingId }) {
+      if (!values.name) {
+        return {
+          field: "name",
+          message: "Phase name is required.",
+        };
+      }
+
+      if (hasDuplicateDefinitionField("phases", projectId, "name", values.name, excludingId)) {
+        return {
+          field: "name",
+          message: "A phase with this name already exists in the selected project.",
+        };
+      }
+
+      return {
+        payload: {
+          name: values.name,
+        },
+      };
+    },
+  },
+  wbs: {
+    singular: "WBS item",
+    plural: "WBS items",
+    createLabel: "Add WBS item",
+    editLabel: "Save WBS item",
+    inlineEdit: true,
+    listTitle: "Defined WBS items",
+    emptyMessage: (project) => `No WBS items yet for ${project.name}.`,
+    fields: [
+      {
+        key: "code",
+        label: "WBS code",
+        placeholder: "3100",
+        required: true,
+      },
+      {
+        key: "name",
+        label: "WBS name",
+        placeholder: "Structural steel",
+        required: true,
+      },
+    ],
+    renderSummary: (item) => `
+      <div class="definition-copy-stack">
+        <strong>${escapeHtml(item.code)}</strong>
+        <span>${escapeHtml(item.name)}</span>
+      </div>
+    `,
+    validate(values, { projectId, excludingId }) {
+      if (!values.code) {
+        return {
+          field: "code",
+          message: "WBS code is required.",
+        };
+      }
+
+      if (!values.name) {
+        return {
+          field: "name",
+          message: "WBS name is required.",
+        };
+      }
+
+      if (hasDuplicateDefinitionField("wbs", projectId, "code", values.code, excludingId)) {
+        return {
+          field: "code",
+          message: "A WBS item with this code already exists in the selected project.",
+        };
+      }
+
+      return {
+        payload: {
+          code: values.code,
+          name: values.name,
+        },
+      };
+    },
+  },
+  packages: {
+    singular: "construction package",
+    plural: "construction packages",
+    createLabel: "Add package",
+    editLabel: "Save package",
+    inlineEdit: true,
+    listTitle: "Defined packages",
+    emptyMessage: (project) => `No construction packages yet for ${project.name}.`,
+    fields: [
+      {
+        key: "code",
+        label: "Package code",
+        placeholder: "PKG-A1",
+        required: true,
+      },
+      {
+        key: "name",
+        label: "Package name",
+        placeholder: "Crusher gallery",
+        required: false,
+      },
+    ],
+    renderSummary: (item) => `
+      <div class="definition-copy-stack">
+        <strong>${escapeHtml(item.code)}</strong>
+        <span>${escapeHtml(item.name || "No package name")}</span>
+      </div>
+    `,
+    validate(values, { projectId, excludingId }) {
+      if (!values.code) {
+        return {
+          field: "code",
+          message: "Package code is required.",
+        };
+      }
+
+      if (hasDuplicateDefinitionField("packages", projectId, "code", values.code, excludingId)) {
+        return {
+          field: "code",
+          message: "A package with this code already exists in the selected project.",
+        };
+      }
+
+      return {
+        payload: {
+          code: values.code,
+          name: values.name,
+        },
+      };
+    },
+  },
+};
+
+let currentProject = projects[0];
+let currentView = "deliverables";
+let editingDefinition = {
+  view: null,
+  itemId: null,
+};
+let editingRuleSetId = null;
+
+const getProjectState = (projectId) => {
+  if (!projectStateStore[projectId]) {
+    projectStateStore[projectId] = createProjectState();
+  }
+
+  return projectStateStore[projectId];
+};
+
+const getDefinitionItems = (view, projectId) => getProjectState(projectId)[view];
+
+const getRuleSets = (projectId) => getProjectState(projectId).ruleSets;
+
+const findDefinitionItem = (view, projectId, itemId) =>
+  getDefinitionItems(view, projectId).find((item) => item.id === itemId);
+
+const hasDuplicateDefinitionField = (view, projectId, field, value, excludingId = null) =>
+  getDefinitionItems(view, projectId).some(
+    (item) =>
+      item.id !== excludingId && normalizeValue(item[field] ?? "") === normalizeValue(value),
+  );
+
+const hasDuplicateRuleSet = (projectId, value, excludingId = null) =>
+  getRuleSets(projectId).some(
+    (item) => item.id !== excludingId && normalizeValue(item.name) === normalizeValue(value),
+  );
+
+const resetDefinitionEditingState = () => {
+  editingDefinition = {
+    view: null,
+    itemId: null,
+  };
+  editingRuleSetId = null;
+};
+
+const showFieldError = (field, message) => {
+  if (!field) return;
+
+  field.setCustomValidity(message);
+  field.reportValidity();
+  field.focus();
+};
+
+const getProjectMetaLabel = (project) => {
+  const codeLabel = project.code || "No code";
+  return project.archived ? `${codeLabel} · Archived` : codeLabel;
+};
+
+const renderProjectOptions = () => {
+  projectOptionList.innerHTML = projects
+    .map(
+      (project) => `
+        <button
+          class="project-option${project.id === currentProject.id ? " is-selected" : ""}"
+          type="button"
+          data-project-id="${escapeHtml(project.id)}"
+          data-project-name="${escapeHtml(project.name)}"
+          data-project-code="${escapeHtml(project.code)}"
+          data-project-archived="${project.archived ? "true" : "false"}"
+        >
+          <strong>${escapeHtml(project.name)}</strong>
+          <span>${escapeHtml(getProjectMetaLabel(project))}</span>
+        </button>
+      `,
+    )
+    .join("");
+};
+
+const renderDefinitionField = (field, value = "") => {
+  const escapedValue = escapeHtml(value);
+  const requiredAttribute = field.required ? "required" : "";
+  const placeholderAttribute = field.placeholder
+    ? `placeholder="${escapeHtml(field.placeholder)}"`
+    : "";
+  const rows = field.rows ?? 3;
+
+  return `
+    <label class="field${field.fullWidth ? " field-full" : ""}">
+      <span>${escapeHtml(field.label)}</span>
+      ${
+        field.type === "textarea"
+          ? `
+            <textarea
+              data-definition-field="${field.key}"
+              ${placeholderAttribute}
+              rows="${rows}"
+              ${requiredAttribute}
+            >${escapedValue}</textarea>
+          `
+          : `
+            <input
+              data-definition-field="${field.key}"
+              type="${field.type ?? "text"}"
+              value="${escapedValue}"
+              ${placeholderAttribute}
+              autocomplete="off"
+              ${requiredAttribute}
+            />
+          `
+      }
+    </label>
+  `;
+};
+
+const renderDefinitionForm = (view, item = null) => {
+  const config = definitionConfigs[view];
+  const values = item ?? {};
+  const isEditing = Boolean(item);
+  const gridClass = config.fields.length === 1 ? " definition-form-grid-single" : "";
+
+  return `
+    <form
+      class="definition-form"
+      id="definitionForm"
+      data-definition-view="${view}"
+      ${isEditing ? `data-item-id="${item.id}"` : ""}
+    >
+      <div class="definition-form-grid${gridClass}">
+        ${config.fields.map((field) => renderDefinitionField(field, values[field.key] ?? "")).join("")}
+      </div>
+      <div class="definition-form-actions">
+        <button class="primary-button" type="submit">
+          ${isEditing ? config.editLabel : config.createLabel}
+        </button>
+        ${
+          isEditing
+            ? `
+              <button class="definition-action" type="button" data-action="cancel-definition-edit">
+                Cancel
+              </button>
+            `
+            : ""
+        }
+      </div>
+    </form>
+  `;
+};
+
+const renderDefinitionInlineEditForm = (view, item, index) => {
+  const config = definitionConfigs[view];
+  const gridClass = config.fields.length === 1 ? " definition-inline-grid-single" : "";
+
+  return `
+    <li>
+      <form
+        class="definition-row definition-row-editing definition-row-inline-edit"
+        id="definitionInlineEditForm"
+        data-definition-view="${view}"
+        data-item-id="${item.id}"
+      >
+        <span class="definition-index">${String(index + 1).padStart(2, "0")}</span>
+        <div class="definition-inline-grid${gridClass}">
+          ${config.fields.map((field) => renderDefinitionField(field, item[field.key] ?? "")).join("")}
+        </div>
+        <div class="definition-actions">
+          <button class="definition-action definition-action-primary" type="submit">
+            Save
+          </button>
+          <button class="definition-action" type="button" data-action="cancel-definition-edit">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </li>
+  `;
+};
+
+const renderDefinitionBody = (view, project) => {
+  const config = definitionConfigs[view];
+  const items = getDefinitionItems(view, project.id);
+  const editingItem =
+    editingDefinition.view === view && editingDefinition.itemId
+      ? findDefinitionItem(view, project.id, editingDefinition.itemId)
+      : null;
+
+  const listMarkup = items.length
+    ? items
+        .map(
+          (item, index) =>
+            config.inlineEdit && editingItem?.id === item.id
+              ? renderDefinitionInlineEditForm(view, item, index)
+              : `
+                  <li class="definition-row">
+                    <span class="definition-index">${String(index + 1).padStart(2, "0")}</span>
+                    <div class="definition-copy">
+                      ${config.renderSummary(item)}
+                    </div>
+                    <div class="definition-actions">
+                      <button
+                        class="definition-action"
+                        type="button"
+                        data-action="edit-definition"
+                        data-definition-view="${view}"
+                        data-item-id="${item.id}"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        class="definition-action definition-action-danger"
+                        type="button"
+                        data-action="delete-definition"
+                        data-definition-view="${view}"
+                        data-item-id="${item.id}"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                `,
+        )
+        .join("")
+    : `
+        <li class="definition-empty">
+          ${escapeHtml(config.emptyMessage(project))}
+        </li>
+      `;
+
+  return `
+    <section class="definition-stack">
+      ${renderDefinitionForm(view, config.inlineEdit ? null : editingItem)}
+
+      <section class="definition-list-shell">
+        <div class="definition-list-head">
+          <p class="definition-list-title">${config.listTitle}</p>
+          <span class="definition-list-count">${items.length}</span>
+        </div>
+        <ol class="definition-list">
+          ${listMarkup}
+        </ol>
+      </section>
+    </section>
+  `;
+};
+
+const renderStageRow = (stage, index) => `
+  <div class="rule-row" data-stage-row>
+    <span class="definition-index">${String(index + 1).padStart(2, "0")}</span>
+    <label class="field rule-field">
+      <span>Stage name</span>
+      <input
+        type="text"
+        data-stage-name
+        value="${escapeHtml(stage.name)}"
+        placeholder="Issued for review"
+        autocomplete="off"
+        required
+      />
+    </label>
+    <button class="definition-action" type="button" data-action="remove-stage-row">
+      Remove
+    </button>
+  </div>
+`;
+
+const renderRuleSetForm = ({ formId, ruleSet = null }) => {
+  const isEditing = Boolean(ruleSet);
+  const stages = ruleSet?.stages?.length ? ruleSet.stages : [createEmptyStage()];
+
+  return `
+    <form
+      class="ruleset-form"
+      id="${formId}"
+      ${isEditing ? `data-rule-set-id="${ruleSet.id}"` : ""}
+    >
+      <label class="field">
+        <span>Rule set name</span>
+        <input
+          type="text"
+          data-ruleset-name
+          value="${escapeHtml(ruleSet?.name ?? "")}"
+          placeholder="IFR package"
+          autocomplete="off"
+          required
+        />
+      </label>
+
+      <div class="ruleset-rule-group">
+        <div class="ruleset-rule-group-head">
+          <p class="definition-list-title">Stages</p>
+          <div class="ruleset-rule-group-tools">
+            <span class="ruleset-count-pill" data-stage-count>
+              ${pluralize(stages.length, "stage")}
+            </span>
+            <button class="definition-action" type="button" data-action="add-stage-row">
+              Add stage
+            </button>
+          </div>
+        </div>
+        <div class="ruleset-rule-grid" data-stage-rows>
+          ${stages.map((stage, index) => renderStageRow(stage, index)).join("")}
+        </div>
+      </div>
+
+      <div class="ruleset-form-actions">
+        <button class="primary-button" type="submit">
+          ${isEditing ? "Save set" : "Create set"}
+        </button>
+        ${
+          isEditing
+            ? `
+              <button class="definition-action" type="button" data-action="cancel-rule-set-edit">
+                Cancel
+              </button>
+            `
+            : ""
+        }
+      </div>
+    </form>
+  `;
+};
+
+const renderRuleSetCard = (ruleSet) => {
+  if (ruleSet.id === editingRuleSetId) {
+    return `
+      <article class="ruleset-card ruleset-card-editing">
+        ${renderRuleSetForm({
+          formId: "ruleSetInlineEditForm",
+          ruleSet,
+        })}
+      </article>
+    `;
+  }
+
+  return `
+    <article class="ruleset-card">
+      <div class="ruleset-card-head">
+        <div class="ruleset-card-copy">
+          <h3 class="ruleset-card-title">${escapeHtml(ruleSet.name)}</h3>
+          <p class="ruleset-card-meta">${pluralize(ruleSet.stages.length, "stage")}</p>
+        </div>
+        <div class="ruleset-card-actions">
+          <div class="definition-actions">
+            <button
+              class="definition-action"
+              type="button"
+              data-action="edit-rule-set"
+              data-rule-set-id="${ruleSet.id}"
+            >
+              Edit
+            </button>
+            <button
+              class="definition-action definition-action-danger"
+              type="button"
+              data-action="delete-rule-set"
+              data-rule-set-id="${ruleSet.id}"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <ol class="ruleset-rule-list">
+        ${ruleSet.stages
+          .map(
+            (stage, index) => `
+              <li class="ruleset-rule-list-item">
+                <span class="ruleset-rule-order">${String(index + 1).padStart(2, "0")}</span>
+                <div class="ruleset-rule-copy">
+                  <strong>${escapeHtml(stage.name)}</strong>
+                </div>
+              </li>
+            `,
+          )
+          .join("")}
+      </ol>
+    </article>
+  `;
+};
+
+const renderRulesOfCreditBody = (project) => {
+  const ruleSets = getRuleSets(project.id);
+  const listMarkup = ruleSets.length
+    ? ruleSets.map((ruleSet) => renderRuleSetCard(ruleSet)).join("")
+    : `
+        <div class="definition-empty">
+          No rules-of-credit sets yet for ${escapeHtml(project.name)}.
+        </div>
+      `;
+
+  return `
+    <section class="definition-stack">
+      <section class="definition-list-shell">
+        ${renderRuleSetForm({
+          formId: "ruleSetCreateForm",
+        })}
+      </section>
+
+      <section class="definition-list-shell">
+        <div class="definition-list-head">
+          <p class="definition-list-title">Defined rule sets</p>
+          <span class="definition-list-count">${ruleSets.length}</span>
+        </div>
+        <div class="ruleset-list">
+          ${listMarkup}
+        </div>
+      </section>
+    </section>
+  `;
+};
+
+const renderNewProjectBody = () => `
+  <form class="project-form" id="projectForm">
+    <div class="form-row">
+      <label class="field">
+        <span>Project name</span>
+        <input
+          type="text"
+          data-project-field="name"
+          placeholder="North River Upgrade"
+          autocomplete="off"
+          required
+        />
+      </label>
+      <label class="field">
+        <span>Project code</span>
+        <input
+          type="text"
+          data-project-field="code"
+          placeholder="NRU-01"
+          autocomplete="off"
+        />
+      </label>
+    </div>
+    <div class="form-row">
+      <label class="field">
+        <span>Status</span>
+        <select data-project-field="status">
+          <option value="active">Active</option>
+          <option value="archived">Archived</option>
+        </select>
+      </label>
+    </div>
+    <button class="primary-button" type="submit">Create project</button>
+  </form>
+`;
+
+const viewMeta = {
+  deliverables: {
+    title: "Deliverables",
+    copy: "Track staged deliverables, ownership, due dates, and follow-up against the selected project.",
+    body: (project) => `
+      <div class="workspace-note">
+        Active project: <strong>${escapeHtml(project.name)}</strong> (${escapeHtml(
+          project.code || "No code",
+        )}). This workspace will hold the compact lifecycle list for that project.
+      </div>
+    `,
+  },
+  types: {
+    title: "Deliverable Types",
+    copy: "Define project-scoped deliverable categories before records are created.",
+    body: (project) => renderDefinitionBody("types", project),
+  },
+  "rules-of-credit": {
+    title: "Rules of Credit",
+    copy: "Create reusable rule-set templates made up of ordered stages.",
+    body: (project) => renderRulesOfCreditBody(project),
+  },
+  phases: {
+    title: "Phases",
+    copy: "Keep informational project phases configurable per project for filtering and reporting.",
+    body: (project) => renderDefinitionBody("phases", project),
+  },
+  wbs: {
+    title: "WBS",
+    copy: "Define unique WBS codes and names per project before deliverables are created.",
+    body: (project) => renderDefinitionBody("wbs", project),
+  },
+  packages: {
+    title: "Packages",
+    copy: "Define the construction packages that deliverables can belong to within this project.",
+    body: (project) => renderDefinitionBody("packages", project),
+  },
+  "new-project": {
+    title: "New project",
+    copy: "Create a project record first, then define its phases, WBS items, packages, deliverable types, and rules of credit.",
+    eyebrow: "Projects",
+    body: () => renderNewProjectBody(),
+  },
+};
+
+const collectDefinitionFormData = (form, view) => {
+  const config = definitionConfigs[view];
+
+  return config.fields.reduce((values, field) => {
+    const input = form.querySelector(`[data-definition-field="${field.key}"]`);
+    values[field.key] = input ? input.value.trim() : "";
+    return values;
+  }, {});
+};
+
+const validateDefinitionForm = (form, view, projectId, excludingId = null) => {
+  const config = definitionConfigs[view];
+  const values = collectDefinitionFormData(form, view);
+  return config.validate(values, { projectId, excludingId });
+};
+
+const collectRuleSetFormData = (form) => {
+  const name = form.querySelector("[data-ruleset-name]")?.value.trim() ?? "";
+  const stages = [...form.querySelectorAll("[data-stage-row]")].map((row) => ({
+    name: row.querySelector("[data-stage-name]")?.value.trim() ?? "",
+  }));
+
+  return { name, stages };
+};
+
+const validateRuleSetForm = (form, projectId, excludingId = null) => {
+  const ruleSetNameInput = form.querySelector("[data-ruleset-name]");
+  const stageRows = [...form.querySelectorAll("[data-stage-row]")];
+  const payload = collectRuleSetFormData(form);
+  const seenStageNames = new Set();
+
+  if (!payload.name) {
+    return {
+      field: ruleSetNameInput,
+      message: "Rule set name is required.",
+    };
+  }
+
+  if (hasDuplicateRuleSet(projectId, payload.name, excludingId)) {
+    return {
+      field: ruleSetNameInput,
+      message: "A rule set with this name already exists in the selected project.",
+    };
+  }
+
+  if (!stageRows.length) {
+    return {
+      field: ruleSetNameInput,
+      message: "Add at least one stage.",
+    };
+  }
+
+  for (const row of stageRows) {
+    const nameInput = row.querySelector("[data-stage-name]");
+    const normalizedStageName = normalizeValue(nameInput.value);
+
+    if (!normalizedStageName) {
+      return {
+        field: nameInput,
+        message: "Stage name is required.",
+      };
+    }
+
+    if (seenStageNames.has(normalizedStageName)) {
+      return {
+        field: nameInput,
+        message: "Stage names must be unique within a rule set.",
+      };
+    }
+
+    seenStageNames.add(normalizedStageName);
+  }
+
+  return {
+    payload: {
+      name: payload.name,
+      stages: payload.stages.map((stage) => ({
+        id: crypto.randomUUID(),
+        name: stage.name,
+      })),
+    },
+  };
+};
+
+const renderView = () => {
+  const config = viewMeta[currentView];
+  const eyebrow = config.eyebrow ?? currentProject.name;
+  const copy = config.copy ?? "";
+  const body = config.body ? config.body(currentProject).trim() : "";
+
+  workspaceEyebrow.textContent = eyebrow;
+  workspaceTitle.textContent = config.title;
+  workspaceCopy.textContent = copy;
+  workspaceCopy.hidden = !copy;
+  workspaceBody.innerHTML = body;
+  workspaceBody.hidden = !body;
+  bindViewInteractions();
+};
+
+const closeSidebarOnMobile = () => {
+  if (window.innerWidth <= 760) {
+    sidebar.classList.remove("is-open");
+    menuToggle.setAttribute("aria-expanded", "false");
+  }
+};
+
+const setActiveMenu = (view) => {
+  menuItems.forEach((item) => {
+    item.classList.toggle("is-active", item.dataset.view === view);
+  });
+};
+
+const closeProjectDropdown = () => {
+  projectDropdown.hidden = true;
+  projectTrigger.setAttribute("aria-expanded", "false");
+};
+
+const openProjectDropdown = () => {
+  projectDropdown.hidden = false;
+  projectTrigger.setAttribute("aria-expanded", "true");
+};
+
+const syncProjectSelection = () => {
+  activeProjectName.textContent = currentProject.name;
+  activeProjectCode.textContent = getProjectMetaLabel(currentProject);
+
+  [...projectOptionList.querySelectorAll("[data-project-id]")].forEach((option) => {
+    option.classList.toggle("is-selected", option.dataset.projectId === currentProject.id);
+  });
+};
+
+const focusFirstField = (selector) => {
+  const field = document.querySelector(selector);
+  if (!field) return;
+
+  field.focus();
+
+  if ("select" in field) {
+    field.select();
+  }
+};
+
+const bindDefinitionForm = (form, view) => {
+  if (!form) return;
+
+  form.addEventListener("input", (event) => {
+    if (
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLTextAreaElement ||
+      event.target instanceof HTMLSelectElement
+    ) {
+      event.target.setCustomValidity("");
+    }
+  });
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const itemId = form.dataset.itemId ?? null;
+    const validation = validateDefinitionForm(form, view, currentProject.id, itemId);
+
+    if (!("payload" in validation)) {
+      const field = form.querySelector(`[data-definition-field="${validation.field}"]`);
+      showFieldError(field, validation.message);
+      return;
+    }
+
+    const items = getDefinitionItems(view, currentProject.id);
+
+    if (itemId) {
+      const item = items.find((entry) => entry.id === itemId);
+
+      if (!item) {
+        return;
+      }
+
+      Object.assign(item, validation.payload);
+    } else {
+      items.push({
+        id: crypto.randomUUID(),
+        ...validation.payload,
+      });
+    }
+
+    editingDefinition = {
+      view: null,
+      itemId: null,
+    };
+    renderView();
+  });
+};
+
+const bindDefinitionView = (view) => {
+  const form = document.getElementById("definitionForm");
+  const inlineEditForm = document.getElementById("definitionInlineEditForm");
+  const cancelButton = workspaceBody.querySelector('[data-action="cancel-definition-edit"]');
+  const editButtons = workspaceBody.querySelectorAll('[data-action="edit-definition"]');
+  const deleteButtons = workspaceBody.querySelectorAll('[data-action="delete-definition"]');
+
+  if (!form && !inlineEditForm) return;
+
+  bindDefinitionForm(form, view);
+  bindDefinitionForm(inlineEditForm, view);
+
+  cancelButton?.addEventListener("click", () => {
+    editingDefinition = {
+      view: null,
+      itemId: null,
+    };
+    renderView();
+  });
+
+  editButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      editingDefinition = {
+        view,
+        itemId: button.dataset.itemId,
+      };
+      renderView();
+    });
+  });
+
+  deleteButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const itemId = button.dataset.itemId;
+
+      getProjectState(currentProject.id)[view] = getDefinitionItems(view, currentProject.id).filter(
+        (item) => item.id !== itemId,
+      );
+
+      if (editingDefinition.view === view && editingDefinition.itemId === itemId) {
+        editingDefinition = {
+          view: null,
+          itemId: null,
+        };
+      }
+
+      renderView();
+    });
+  });
+
+  if (inlineEditForm) {
+    focusFirstField("#definitionInlineEditForm [data-definition-field]");
+    return;
+  }
+
+  focusFirstField("#definitionForm [data-definition-field]");
+};
+
+const bindRuleSetView = () => {
+  const createForm = document.getElementById("ruleSetCreateForm");
+  const inlineEditForm = document.getElementById("ruleSetInlineEditForm");
+  const cancelButton = workspaceBody.querySelector('[data-action="cancel-rule-set-edit"]');
+  const editButtons = workspaceBody.querySelectorAll('[data-action="edit-rule-set"]');
+  const deleteButtons = workspaceBody.querySelectorAll('[data-action="delete-rule-set"]');
+
+  if (!createForm && !inlineEditForm) return;
+
+  const bindRuleSetForm = (form) => {
+    if (!form) return;
+
+    const rowsContainer = form.querySelector("[data-stage-rows]");
+    const addStageButton = form.querySelector('[data-action="add-stage-row"]');
+    const stageCount = form.querySelector("[data-stage-count]");
+
+    if (!rowsContainer) return;
+
+    const updateStageRowState = () => {
+      const rows = [...rowsContainer.querySelectorAll("[data-stage-row]")];
+
+      rows.forEach((row, index) => {
+        const indexLabel = row.querySelector(".definition-index");
+        const removeButton = row.querySelector('[data-action="remove-stage-row"]');
+
+        if (indexLabel) {
+          indexLabel.textContent = String(index + 1).padStart(2, "0");
+        }
+
+        if (removeButton) {
+          removeButton.disabled = rows.length === 1;
+        }
+      });
+
+      if (stageCount) {
+        stageCount.textContent = pluralize(rows.length, "stage");
+      }
+    };
+
+    const appendStageRow = (stage = createEmptyStage()) => {
+      rowsContainer.insertAdjacentHTML(
+        "beforeend",
+        renderStageRow(stage, rowsContainer.querySelectorAll("[data-stage-row]").length),
+      );
+      updateStageRowState();
+    };
+
+    addStageButton?.addEventListener("click", () => {
+      appendStageRow();
+      rowsContainer
+        .querySelector("[data-stage-row]:last-child [data-stage-name]")
+        ?.focus();
+    });
+
+    rowsContainer.addEventListener("click", (event) => {
+      const removeButton = event.target.closest('[data-action="remove-stage-row"]');
+
+      if (!removeButton || removeButton.disabled) {
+        return;
+      }
+
+      removeButton.closest("[data-stage-row]")?.remove();
+      updateStageRowState();
+    });
+
+    form.addEventListener("input", (event) => {
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement
+      ) {
+        event.target.setCustomValidity("");
+      }
+    });
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const ruleSetId = form.dataset.ruleSetId ?? null;
+      const validation = validateRuleSetForm(form, currentProject.id, ruleSetId);
+
+      if (!("payload" in validation)) {
+        showFieldError(validation.field, validation.message);
+        return;
+      }
+
+      if (ruleSetId) {
+        const ruleSet = getRuleSets(currentProject.id).find((item) => item.id === ruleSetId);
+
+        if (!ruleSet) {
+          return;
+        }
+
+        ruleSet.name = validation.payload.name;
+        ruleSet.stages = validation.payload.stages;
+        editingRuleSetId = null;
+      } else {
+        getRuleSets(currentProject.id).push({
+          id: crypto.randomUUID(),
+          ...validation.payload,
+        });
+      }
+
+      renderView();
+    });
+
+    updateStageRowState();
+  };
+
+  bindRuleSetForm(createForm);
+  bindRuleSetForm(inlineEditForm);
+
+  cancelButton?.addEventListener("click", () => {
+    editingRuleSetId = null;
+    renderView();
+  });
+
+  editButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      editingRuleSetId = button.dataset.ruleSetId;
+      renderView();
+    });
+  });
+
+  deleteButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const ruleSetId = button.dataset.ruleSetId;
+
+      getProjectState(currentProject.id).ruleSets = getRuleSets(currentProject.id).filter(
+        (item) => item.id !== ruleSetId,
+      );
+
+      if (editingRuleSetId === ruleSetId) {
+        editingRuleSetId = null;
+      }
+
+      renderView();
+    });
+  });
+
+  if (inlineEditForm) {
+    focusFirstField("#ruleSetInlineEditForm [data-ruleset-name]");
+    return;
+  }
+
+  focusFirstField("#ruleSetCreateForm [data-ruleset-name]");
+};
+
+const slugify = (value) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "project";
+
+const buildProjectId = (name) => {
+  const baseId = slugify(name);
+  let candidate = baseId;
+  let index = 2;
+
+  while (projects.some((project) => project.id === candidate)) {
+    candidate = `${baseId}-${index}`;
+    index += 1;
+  }
+
+  return candidate;
+};
+
+const bindNewProjectView = () => {
+  const form = document.getElementById("projectForm");
+
+  if (!form) return;
+
+  form.addEventListener("input", (event) => {
+    if (
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLTextAreaElement ||
+      event.target instanceof HTMLSelectElement
+    ) {
+      event.target.setCustomValidity("");
+    }
+  });
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const nameInput = form.querySelector('[data-project-field="name"]');
+    const codeInput = form.querySelector('[data-project-field="code"]');
+    const statusInput = form.querySelector('[data-project-field="status"]');
+    const name = nameInput?.value.trim() ?? "";
+    const code = codeInput?.value.trim() ?? "";
+    const archived = statusInput?.value === "archived";
+
+    if (!name) {
+      showFieldError(nameInput, "Project name is required.");
+      return;
+    }
+
+    if (projects.some((project) => normalizeValue(project.name) === normalizeValue(name))) {
+      showFieldError(nameInput, "A project with this name already exists.");
+      return;
+    }
+
+    if (
+      code &&
+      projects.some((project) => normalizeValue(project.code) === normalizeValue(code))
+    ) {
+      showFieldError(codeInput, "A project with this code already exists.");
+      return;
+    }
+
+    const project = {
+      id: buildProjectId(name),
+      name,
+      code,
+      archived,
+    };
+
+    projects = [...projects, project];
+    projectStateStore[project.id] = createProjectState();
+    currentProject = project;
+    currentView = "deliverables";
+    resetDefinitionEditingState();
+    renderProjectOptions();
+    syncProjectSelection();
+    setActiveMenu(currentView);
+    renderView();
+    closeProjectDropdown();
+    closeSidebarOnMobile();
+  });
+
+  focusFirstField('[data-project-field="name"]');
+};
+
+const bindViewInteractions = () => {
+  if (definitionConfigs[currentView]) {
+    bindDefinitionView(currentView);
+    return;
+  }
+
+  if (currentView === "rules-of-credit") {
+    bindRuleSetView();
+    return;
+  }
+
+  if (currentView === "new-project") {
+    bindNewProjectView();
+  }
+};
+
+menuToggle.setAttribute("aria-expanded", "false");
+
+menuToggle.addEventListener("click", () => {
+  const nextState = !sidebar.classList.contains("is-open");
+  sidebar.classList.toggle("is-open", nextState);
+  menuToggle.setAttribute("aria-expanded", String(nextState));
+});
+
+projectTrigger.addEventListener("click", () => {
+  if (projectDropdown.hidden) {
+    openProjectDropdown();
+  } else {
+    closeProjectDropdown();
+  }
+});
+
+projectOptionList.addEventListener("click", (event) => {
+  const option = event.target.closest("[data-project-id]");
+
+  if (!option) {
+    return;
+  }
+
+  currentProject =
+    projects.find((project) => project.id === option.dataset.projectId) ?? currentProject;
+  resetDefinitionEditingState();
+
+  if (currentView === "new-project") {
+    currentView = "deliverables";
+    setActiveMenu(currentView);
+  }
+
+  syncProjectSelection();
+  renderView();
+  closeProjectDropdown();
+  closeSidebarOnMobile();
+});
+
+addProjectOption.addEventListener("click", () => {
+  currentView = "new-project";
+  resetDefinitionEditingState();
+  setActiveMenu("");
+  renderView();
+  closeProjectDropdown();
+  closeSidebarOnMobile();
+});
+
+menuItems.forEach((item) => {
+  item.addEventListener("click", () => {
+    currentView = item.dataset.view;
+    resetDefinitionEditingState();
+    setActiveMenu(currentView);
+    renderView();
+    closeProjectDropdown();
+    closeSidebarOnMobile();
+  });
+});
+
+document.addEventListener("click", (event) => {
+  if (!(event.target instanceof Node)) {
+    return;
+  }
+
+  if (!sidebar.contains(event.target) && !menuToggle.contains(event.target)) {
+    closeSidebarOnMobile();
+  }
+
+  if (!projectTrigger.contains(event.target) && !projectDropdown.contains(event.target)) {
+    closeProjectDropdown();
+  }
+});
+
+renderProjectOptions();
+syncProjectSelection();
+renderView();
