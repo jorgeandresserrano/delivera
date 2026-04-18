@@ -65,6 +65,145 @@ const createProjectScopedEntity = (projectId, payload) => ({
   ...payload,
 });
 
+const createNamedProjectEntities = (projectId, names) =>
+  names.map((name) => createProjectScopedEntity(projectId, { name }));
+
+const createSeedStage = (name) => ({
+  id: crypto.randomUUID(),
+  name,
+});
+
+const createSeedTypeAllocation = (roleId) => ({
+  id: crypto.randomUUID(),
+  roleId,
+});
+
+const DEMO_PROJECT_DEFINITION_SEEDS = Object.freeze({
+  "north-river": {
+    roles: ["Project engineer", "Lead designer", "Checker", "Document controller"],
+    members: ["Jamie Chen", "Avery Patel", "Morgan Lee"],
+    phases: ["Feasibility", "Detailed engineering", "Construction support"],
+    wbs: [
+      { code: "3100", name: "Structural steel" },
+      { code: "3200", name: "Conveyors" },
+      { code: "3300", name: "Transfer chutes" },
+    ],
+    packages: [
+      { code: "PKG-A1", name: "Crusher gallery" },
+      { code: "PKG-A2", name: "Transfer tower" },
+    ],
+    ruleSets: [
+      {
+        name: "Design review",
+        stages: ["Draft", "Internal review", "Client review", "Approved"],
+      },
+      {
+        name: "Construction release",
+        stages: ["Ready for release", "Issued for construction", "As-built"],
+      },
+    ],
+    types: [
+      { name: "Engineering drawings", roles: ["Lead designer", "Checker"] },
+      { name: "Calculation brief", roles: ["Project engineer", "Checker"] },
+      { name: "Material take-off", roles: ["Project engineer", "Document controller"] },
+    ],
+  },
+  "west-annex": {
+    roles: ["Project manager", "Structural engineer", "Reviewer", "BIM coordinator"],
+    members: ["Nora Kim", "Diego Alvarez", "Priya Shah"],
+    phases: ["Existing conditions", "Retrofit design", "Tender support"],
+    wbs: [
+      { code: "4100", name: "Existing framing" },
+      { code: "4200", name: "Envelope tie-ins" },
+      { code: "4300", name: "Access platforms" },
+    ],
+    packages: [
+      { code: "PKG-B1", name: "Mezzanine retrofit" },
+      { code: "PKG-B2", name: "Roof strengthening" },
+    ],
+    ruleSets: [
+      {
+        name: "Retrofit workflow",
+        stages: ["Survey", "Basis of design", "Issued for pricing"],
+      },
+      {
+        name: "Field change notice",
+        stages: ["Identified", "Reviewed", "Closed"],
+      },
+    ],
+    types: [
+      { name: "Retrofit drawing", roles: ["Structural engineer", "Reviewer"] },
+      { name: "Site instruction", roles: ["Project manager", "Reviewer"] },
+      { name: "Model update", roles: ["BIM coordinator", "Structural engineer"] },
+    ],
+  },
+  "ore-handling": {
+    roles: ["Discipline lead", "Mechanical designer", "Approver", "Planner"],
+    members: ["Ethan Brooks", "Mila Novak", "Zoe Campbell"],
+    phases: ["Concept select", "60% design", "Issued for construction"],
+    wbs: [
+      { code: "5100", name: "Transfer conveyors" },
+      { code: "5200", name: "Ore bins" },
+      { code: "5300", name: "Dust collection" },
+    ],
+    packages: [
+      { code: "PKG-C1", name: "Conveyor extension" },
+      { code: "PKG-C2", name: "Bin foundations" },
+    ],
+    ruleSets: [
+      {
+        name: "Expansion package",
+        stages: ["Work in progress", "Internal review", "Issued"],
+      },
+      {
+        name: "Procurement support",
+        stages: ["RFQ support", "Vendor review", "Final tab"],
+      },
+    ],
+    types: [
+      { name: "General arrangement drawing", roles: ["Mechanical designer", "Approver"] },
+      { name: "Equipment datasheet", roles: ["Discipline lead", "Approver"] },
+      { name: "Installation work pack", roles: ["Planner", "Discipline lead"] },
+    ],
+  },
+});
+
+const createSeededProjectState = (projectId) => {
+  const definitionSeed = DEMO_PROJECT_DEFINITION_SEEDS[projectId];
+
+  if (!definitionSeed) {
+    return createProjectState();
+  }
+
+  const projectState = createProjectState();
+  const roles = createNamedProjectEntities(projectId, definitionSeed.roles);
+  const roleIdsByName = new Map(roles.map((role) => [role.name, role.id]));
+
+  projectState.roles = roles;
+  projectState.members = createNamedProjectEntities(projectId, definitionSeed.members);
+  projectState.phases = createNamedProjectEntities(projectId, definitionSeed.phases);
+  projectState.wbs = definitionSeed.wbs.map((item) => createProjectScopedEntity(projectId, item));
+  projectState.packages = definitionSeed.packages.map((item) =>
+    createProjectScopedEntity(projectId, item),
+  );
+  projectState.ruleSets = definitionSeed.ruleSets.map((ruleSet) =>
+    createProjectScopedEntity(projectId, {
+      name: ruleSet.name,
+      stages: ruleSet.stages.map(createSeedStage),
+    }),
+  );
+  projectState.types = definitionSeed.types.map((deliverableType) =>
+    createProjectScopedEntity(projectId, {
+      name: deliverableType.name,
+      allocations: deliverableType.roles.map((roleName) =>
+        createSeedTypeAllocation(roleIdsByName.get(roleName)),
+      ),
+    }),
+  );
+
+  return projectState;
+};
+
 const normalizeProjectScopedCollection = (projectId, collection = []) => {
   collection.forEach((item) => {
     if (item && typeof item === "object") {
@@ -97,7 +236,7 @@ let projects = [...projectOptionList.querySelectorAll("[data-project-id]")].map(
 );
 
 const projectStateStore = Object.fromEntries(
-  projects.map((project) => [project.id, createProjectState()]),
+  projects.map((project) => [project.id, createSeededProjectState(project.id)]),
 );
 
 const definitionConfigs = {
