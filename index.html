@@ -96,7 +96,7 @@
         <section class="menu-group">
           <p class="group-label">Definitions</p>
           <button class="menu-item" data-view="types" type="button">Deliverable Types</button>
-          <button class="menu-item" data-view="rules-of-credit" type="button">Rules of Credit</button>
+          <button class="menu-item" data-view="rules-of-credit" type="button">Lifecycle Stages</button>
           <button class="menu-item" data-view="phases" type="button">Phases</button>
           <button class="menu-item" data-view="wbs" type="button">WBS</button>
           <button class="menu-item" data-view="packages" type="button">Packages</button>
@@ -106,7 +106,7 @@
       </aside>
 
       <main class="workspace">
-        <section class="workspace-panel">
+        <section class="workspace-panel" id="workspacePanel">
           <p class="workspace-eyebrow" id="workspaceEyebrow">North River Upgrade</p>
           <h2 class="workspace-title" id="workspaceTitle">Deliverables</h2>
           <p class="workspace-copy" id="workspaceCopy">
@@ -116,6 +116,8 @@
         </section>
       </main>
     </div>
+
+    <div class="deliverable-modal" id="deliverableModal" hidden></div>
 
     <div class="confirmation-modal" id="confirmationModal" hidden>
       <div

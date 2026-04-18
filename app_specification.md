@@ -6,7 +6,7 @@ Delivera is a compact, data-dense internal application for tracking the lifecycl
 
 This is a working tool, not a presentation app. The UI must maximize information density, minimize wasted space, and support fast scanning and fast editing.
 
-The purpose of the app is to follow each deliverable through its rules-of-credit lifecycle, focusing on:
+The purpose of the app is to follow each deliverable through its lifecycle stages, focusing on:
 
 - current stage
 - expected dates
@@ -50,7 +50,7 @@ Each deliverable must belong to:
 - a Project
 - a Deliverable Type
 - a Project Phase
-- a Rules-of-Credit Set
+- a Lifecycle Stage Set
 - a WBS item
 - a Construction Package
 
@@ -70,7 +70,7 @@ Important decisions:
 - deliverables do not have a separate title/name in v1
 - current stage is derived from the deliverable's stage records rather than stored as a duplicate field
 
-Because deliverable type and rules-of-credit drive stage and assignment instantiation, they are creation-time structural choices and should be treated as fixed after creation in v1.
+Because deliverable type and the selected lifecycle stage set drive stage and assignment instantiation, they are creation-time structural choices and should be treated as fixed after creation in v1.
 
 ---
 
@@ -102,22 +102,22 @@ Project phase is informational and useful for filtering, reporting, and grouping
 
 Important rule:
 
-- project phase does not determine or constrain the rules-of-credit set assigned to a deliverable
+- project phase does not determine or constrain the lifecycle stage set assigned to a deliverable
 
 ---
 
-## Rules of Credit
+## Lifecycle Stages
 
-A Rules-of-Credit Set is a reusable project-scoped template that defines an ordered sequence of stages.
+A Lifecycle Stage Set is a reusable project-scoped template that defines an ordered sequence of stages.
 
-Each rules-of-credit set:
+Each lifecycle stage set:
 
 - belongs to a project
 - is selected manually on each deliverable
 - contains multiple stages
 - does not contain any dates
 
-### Rule Set Stages
+### Stages Within a Lifecycle Stage Set
 
 Each stage defines:
 
@@ -125,22 +125,22 @@ Each stage defines:
 - order
 - optional description
 
-Rule set stages are pure templates.
+These stages are pure templates.
 
 Important rule:
 
-- rules-of-credit sets are reusable within a project
-- editing a ruleset should affect future deliverables, not rewrite historical deliverable-stage snapshots that were already instantiated
+- lifecycle stage sets are reusable within a project
+- editing a lifecycle stage set should affect future deliverables, not rewrite historical deliverable-stage snapshots that were already instantiated
 
 ---
 
 ## Critical Design Rule
 
-Dates must never be stored on the ruleset stage definition.
+Dates must never be stored on the lifecycle stage definition.
 
 Instead:
 
-- each deliverable instantiates its own stage records from the selected ruleset
+- each deliverable instantiates its own stage records from the selected lifecycle stage set
 - each deliverable-stage record stores:
   - expected due date
   - actual completion date
@@ -148,7 +148,7 @@ Instead:
 
 This requires two separate concepts:
 
-- `RuleSetStage`: template stage
+- `LifecycleStageTemplate`: template stage
 - `DeliverableStage`: per-deliverable stage instance
 
 Each deliverable stage must snapshot the template values needed for history:
@@ -294,7 +294,7 @@ There must be a dedicated section to manage project master data:
 - Project Phases
 - WBS items
 - Construction Packages
-- Rules-of-Credit Sets
+- Lifecycle Stage Sets
 - Stages within each set
 
 No business data is hardcoded.
@@ -310,7 +310,7 @@ Creating a deliverable must be a single transactional operation.
 When a deliverable is created, the system must:
 
 1. create the deliverable row
-2. instantiate deliverable stages from the selected ruleset
+2. instantiate deliverable stages from the selected lifecycle stage set
 3. instantiate deliverable assignments from the selected deliverable type's role templates
 4. mark the first stage as `in_progress`
 5. write audit entries for the created records
@@ -333,8 +333,8 @@ This ensures the operational state always starts from a complete and consistent 
 - ProjectPhase
 - WBSItem
 - ConstructionPackage
-- RuleOfCreditSet
-- RuleSetStage
+- LifecycleStageSet
+- LifecycleStageTemplate
 
 ### Operational
 
@@ -378,8 +378,8 @@ This is an internal operations tool, so usability and density matter more than p
 Delivera is a secure, relational, project-based application where:
 
 - all business master data is configurable and project-scoped
-- each deliverable belongs to a project, type, phase, WBS item, construction package, and rules-of-credit set
-- rules-of-credit define ordered stage templates and never store dates
+- each deliverable belongs to a project, type, phase, WBS item, construction package, and lifecycle stage set
+- lifecycle stage sets define ordered stage templates and never store dates
 - each deliverable owns instantiated stage records with expected dates, actual dates, and explicit status
 - the current stage is derived from those stage records
 - assignment roles are configurable per deliverable type and instantiated per deliverable

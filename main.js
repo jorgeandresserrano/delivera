@@ -12,9 +12,15 @@ const workspaceEyebrow = document.getElementById("workspaceEyebrow");
 const workspaceTitle = document.getElementById("workspaceTitle");
 const workspaceCopy = document.getElementById("workspaceCopy");
 const workspaceBody = document.getElementById("workspaceBody");
+const workspacePanel = document.getElementById("workspacePanel");
+const deliverableModal = document.getElementById("deliverableModal");
 const confirmationModal = document.getElementById("confirmationModal");
+const confirmationDialogEyebrow = confirmationModal.querySelector(".confirmation-dialog-eyebrow");
 const confirmationDialogTitle = document.getElementById("confirmationDialogTitle");
 const confirmationDialogMessage = document.getElementById("confirmationDialogMessage");
+const confirmationDialogSubjectLabel = confirmationModal.querySelector(
+  ".confirmation-dialog-subject-label",
+);
 const confirmationDialogSubject = document.getElementById("confirmationDialogSubject");
 const confirmationDialogCancel = document.getElementById("confirmationDialogCancel");
 const confirmationDialogConfirm = document.getElementById("confirmationDialogConfirm");
@@ -40,6 +46,7 @@ const createProjectFromOption = (option) => ({
 });
 
 const createProjectState = () => ({
+  deliverables: [],
   types: [],
   phases: [],
   wbs: [],
@@ -51,6 +58,15 @@ const createProjectState = () => ({
 
 const createEmptyStage = () => ({
   name: "",
+});
+
+const createDeliverablesTableFilters = () => ({
+  code: "",
+  typeId: "",
+  ruleSetId: "",
+  phaseId: "",
+  wbsId: "",
+  packageId: "",
 });
 
 let projects = [...projectOptionList.querySelectorAll("[data-project-id]")].map((option) =>
@@ -370,6 +386,12 @@ let currentView = "deliverables";
 let projectEditorProjectId = null;
 let pendingConfirmationAction = null;
 let confirmationReturnFocus = null;
+let deliverableModalReturnFocus = null;
+let deliverablesTableState = {
+  sortBy: "code",
+  sortDirection: "asc",
+  filters: createDeliverablesTableFilters(),
+};
 let editingDefinition = {
   view: null,
   itemId: null,
@@ -387,6 +409,8 @@ const getProjectState = (projectId) => {
 const getDefinitionItems = (view, projectId) => getProjectState(projectId)[view];
 
 const getRuleSets = (projectId) => getProjectState(projectId).ruleSets;
+
+const getDeliverables = (projectId) => getProjectState(projectId).deliverables;
 
 const getRoles = (projectId) => getProjectState(projectId).roles;
 
@@ -411,6 +435,38 @@ const getRoleDisplayName = (projectId, roleId) => findRole(projectId, roleId)?.n
 const getMembersForRole = (projectId, roleId) =>
   getMembers(projectId).filter((member) => member.roleId === roleId);
 
+const getDefinitionDisplayName = (view, projectId, itemId) => {
+  const config = definitionConfigs[view];
+  const item = findDefinitionItem(view, projectId, itemId);
+
+  if (!config || !item) {
+    return "Unknown";
+  }
+
+  return config.getDisplayName(item, { projectId });
+};
+
+const getRuleSetDisplayName = (projectId, ruleSetId) =>
+  findRuleSet(projectId, ruleSetId)?.name ?? "Unknown";
+
+const getDefinitionOptions = (view, projectId) =>
+  getDefinitionItems(view, projectId).map((item) => ({
+    value: item.id,
+    label: getDefinitionDisplayName(view, projectId, item.id),
+  }));
+
+const getRuleSetOptions = (projectId) =>
+  getRuleSets(projectId).map((ruleSet) => ({
+    value: ruleSet.id,
+    label: ruleSet.name,
+  }));
+
+const getDeliverablesUsingDefinition = (projectId, field, itemId) =>
+  getDeliverables(projectId).filter((deliverable) => deliverable[field] === itemId);
+
+const getDeliverablesUsingRuleSet = (projectId, ruleSetId) =>
+  getDeliverables(projectId).filter((deliverable) => deliverable.ruleSetId === ruleSetId);
+
 const hasDuplicateDefinitionField = (view, projectId, field, value, excludingId = null) =>
   getDefinitionItems(view, projectId).some(
     (item) =>
@@ -423,6 +479,29 @@ const hasDuplicateRuleSet = (projectId, value, excludingId = null) =>
   );
 
 const findProjectById = (projectId) => projects.find((project) => project.id === projectId) ?? null;
+
+const resetDeliverablesTableState = () => {
+  deliverablesTableState = {
+    sortBy: "code",
+    sortDirection: "asc",
+    filters: createDeliverablesTableFilters(),
+  };
+};
+
+const formatLabelList = (labels) => {
+  if (labels.length <= 1) {
+    return labels[0] ?? "";
+  }
+
+  if (labels.length === 2) {
+    return `${labels[0]} and ${labels[1]}`;
+  }
+
+  return `${labels.slice(0, -1).join(", ")}, and ${labels.at(-1)}`;
+};
+
+const formatDefinitionLabel = (label = "") =>
+  label.replace(/\b[a-z]/g, (character) => character.toUpperCase());
 
 const resetDefinitionEditingState = () => {
   editingDefinition = {
@@ -446,6 +525,56 @@ const openProjectEditor = (projectId = null) => {
   closeSidebarOnMobile();
 };
 
+const syncBodyModalState = () => {
+  document.body.classList.toggle(
+    "has-modal-open",
+    !confirmationModal.hidden || !deliverableModal.hidden,
+  );
+};
+
+const isDeliverableModalOpen = () => !deliverableModal.hidden;
+
+const closeDeliverableModal = ({ restoreFocus = true } = {}) => {
+  if (!isDeliverableModalOpen()) {
+    deliverableModalReturnFocus = null;
+    return;
+  }
+
+  deliverableModal.hidden = true;
+  deliverableModal.innerHTML = "";
+  syncBodyModalState();
+
+  const nextFocusTarget = deliverableModalReturnFocus;
+  deliverableModalReturnFocus = null;
+
+  if (
+    restoreFocus &&
+    nextFocusTarget instanceof HTMLElement &&
+    document.contains(nextFocusTarget)
+  ) {
+    nextFocusTarget.focus();
+  }
+};
+
+const openDeliverableModal = () => {
+  if (showMissingDeliverableRequirementsFeedback(currentProject.id)) {
+    return;
+  }
+
+  deliverableModalReturnFocus =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  deliverableModal.innerHTML = renderDeliverableModalContent(currentProject);
+  deliverableModal.hidden = false;
+  syncBodyModalState();
+  closeProjectDropdown();
+  closeSidebarOnMobile();
+  bindDeliverableModal();
+
+  requestAnimationFrame(() => {
+    focusFirstField("#deliverableModal [data-deliverable-field=\"code\"]");
+  });
+};
+
 const isConfirmationModalOpen = () => !confirmationModal.hidden;
 
 const closeConfirmationModal = ({ restoreFocus = true } = {}) => {
@@ -456,7 +585,7 @@ const closeConfirmationModal = ({ restoreFocus = true } = {}) => {
   }
 
   confirmationModal.hidden = true;
-  document.body.classList.remove("has-modal-open");
+  syncBodyModalState();
 
   const nextFocusTarget = confirmationReturnFocus;
   pendingConfirmationAction = null;
@@ -477,8 +606,10 @@ const setConfirmationConfirmVariant = (variant = "danger") => {
 };
 
 const openConfirmationModal = ({
+  eyebrow = "Confirm deletion",
   title,
   message,
+  subjectLabel = "Selected item",
   subject,
   confirmLabel = "Delete",
   confirmVariant = "danger",
@@ -489,14 +620,21 @@ const openConfirmationModal = ({
   confirmationReturnFocus =
     document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
+  if (confirmationDialogEyebrow) {
+    confirmationDialogEyebrow.textContent = eyebrow;
+  }
+
   confirmationDialogTitle.textContent = title;
   confirmationDialogMessage.textContent = message;
+  if (confirmationDialogSubjectLabel) {
+    confirmationDialogSubjectLabel.textContent = subjectLabel;
+  }
   confirmationDialogSubject.textContent = subject;
   confirmationDialogConfirm.textContent = confirmLabel;
   confirmationDialogCancel.hidden = cancelHidden;
   setConfirmationConfirmVariant(confirmVariant);
   confirmationModal.hidden = false;
-  document.body.classList.add("has-modal-open");
+  syncBodyModalState();
   closeProjectDropdown();
   closeSidebarOnMobile();
 
@@ -545,6 +683,35 @@ const requestDefinitionDeletion = (view, itemId) => {
     }
   }
 
+  const deliverableReferenceFieldMap = {
+    types: "typeId",
+    phases: "phaseId",
+    wbs: "wbsId",
+    packages: "packageId",
+  };
+  const deliverableReferenceField = deliverableReferenceFieldMap[view];
+
+  if (deliverableReferenceField) {
+    const dependentDeliverables = getDeliverablesUsingDefinition(
+      currentProject.id,
+      deliverableReferenceField,
+      itemId,
+    );
+
+    if (dependentDeliverables.length) {
+      openConfirmationModal({
+        title: `Cannot delete ${config.singular}`,
+        message: `Remove or update ${pluralize(dependentDeliverables.length, "deliverable")} before deleting this ${config.singular} from ${currentProject.name}.`,
+        subject: config.getDisplayName(item, { projectId: currentProject.id }),
+        confirmLabel: "Close",
+        confirmVariant: "primary",
+        cancelHidden: true,
+        onConfirm: () => {},
+      });
+      return;
+    }
+  }
+
   openConfirmationModal({
     title: `Delete ${config.singular}?`,
     message: `This will remove it from ${currentProject.name}. This action cannot be undone in this prototype.`,
@@ -574,9 +741,24 @@ const requestRuleSetDeletion = (ruleSetId) => {
     return;
   }
 
+  const dependentDeliverables = getDeliverablesUsingRuleSet(currentProject.id, ruleSetId);
+
+  if (dependentDeliverables.length) {
+    openConfirmationModal({
+      title: "Cannot delete lifecycle stage set",
+      message: `Remove or update ${pluralize(dependentDeliverables.length, "deliverable")} before deleting this lifecycle stage set from ${currentProject.name}.`,
+      subject: ruleSet.name,
+      confirmLabel: "Close",
+      confirmVariant: "primary",
+      cancelHidden: true,
+      onConfirm: () => {},
+    });
+    return;
+  }
+
   openConfirmationModal({
-    title: "Delete rules of credit set?",
-    message: `This will remove the set and all of its stages from ${currentProject.name}. This action cannot be undone in this prototype.`,
+    title: "Delete lifecycle stage set?",
+    message: `This will remove the lifecycle stage set and all of its stages from ${currentProject.name}. This action cannot be undone in this prototype.`,
     subject: ruleSet.name,
     onConfirm: () => {
       deleteRuleSet(ruleSetId);
@@ -588,6 +770,7 @@ const deleteProject = (projectId) => {
   projects = projects.filter((entry) => entry.id !== projectId);
   delete projectStateStore[projectId];
   currentProject = projects[0];
+  resetDeliverablesTableState();
   currentView = "deliverables";
   closeProjectEditor();
   resetDefinitionEditingState();
@@ -908,7 +1091,7 @@ const renderRuleSetForm = ({ formId, ruleSet = null }) => {
       ${isEditing ? `data-rule-set-id="${ruleSet.id}"` : ""}
     >
       <label class="field">
-        <span>Rule set name</span>
+        <span>Lifecycle stage set name</span>
         <input
           type="text"
           data-ruleset-name
@@ -1019,7 +1202,7 @@ const renderRulesOfCreditBody = (project) => {
     ? ruleSets.map((ruleSet) => renderRuleSetCard(ruleSet)).join("")
     : `
         <div class="definition-empty">
-          No rules-of-credit sets yet for ${escapeHtml(project.name)}.
+          No lifecycle stage sets yet for ${escapeHtml(project.name)}.
         </div>
       `;
 
@@ -1033,12 +1216,491 @@ const renderRulesOfCreditBody = (project) => {
 
       <section class="definition-list-shell">
         <div class="definition-list-head">
-          <p class="definition-list-title">Defined rule sets</p>
+          <p class="definition-list-title">Defined lifecycle stage sets</p>
           <span class="definition-list-count">${ruleSets.length}</span>
         </div>
         <div class="ruleset-list">
           ${listMarkup}
         </div>
+      </section>
+    </section>
+  `;
+};
+
+const deliverableColumns = [
+  {
+    key: "code",
+    label: "Code",
+    filterKind: "text",
+    getDisplayValue: (deliverable) => deliverable.code,
+  },
+  {
+    key: "typeId",
+    label: "Type",
+    filterKind: "select",
+    getDisplayValue: (deliverable, projectId) =>
+      getDefinitionDisplayName("types", projectId, deliverable.typeId),
+    getFilterOptions: (projectId) => getDefinitionOptions("types", projectId),
+  },
+  {
+    key: "ruleSetId",
+    label: "Lifecycle Stages",
+    filterKind: "select",
+    getDisplayValue: (deliverable, projectId) =>
+      getRuleSetDisplayName(projectId, deliverable.ruleSetId),
+    getFilterOptions: (projectId) => getRuleSetOptions(projectId),
+  },
+  {
+    key: "phaseId",
+    label: "Phase",
+    filterKind: "select",
+    getDisplayValue: (deliverable, projectId) =>
+      getDefinitionDisplayName("phases", projectId, deliverable.phaseId),
+    getFilterOptions: (projectId) => getDefinitionOptions("phases", projectId),
+  },
+  {
+    key: "wbsId",
+    label: "WBS",
+    filterKind: "select",
+    getDisplayValue: (deliverable, projectId) =>
+      getDefinitionDisplayName("wbs", projectId, deliverable.wbsId),
+    getFilterOptions: (projectId) => getDefinitionOptions("wbs", projectId),
+  },
+  {
+    key: "packageId",
+    label: "Package",
+    filterKind: "select",
+    getDisplayValue: (deliverable, projectId) =>
+      deliverable.packageId
+        ? getDefinitionDisplayName("packages", projectId, deliverable.packageId)
+        : "—",
+    getSortValue: (deliverable, projectId) =>
+      deliverable.packageId
+        ? getDefinitionDisplayName("packages", projectId, deliverable.packageId)
+        : "",
+    getFilterOptions: (projectId) => [
+      {
+        value: "__none__",
+        label: "No package",
+      },
+      ...getDefinitionOptions("packages", projectId),
+    ],
+  },
+];
+
+const getMissingDeliverableRequirements = (projectId) => {
+  const requirements = [
+    {
+      label: "deliverable type",
+      isMissing: !getDefinitionItems("types", projectId).length,
+    },
+    {
+      label: "lifecycle stage set",
+      isMissing: !getRuleSets(projectId).length,
+    },
+    {
+      label: "project phase",
+      isMissing: !getDefinitionItems("phases", projectId).length,
+    },
+    {
+      label: "WBS item",
+      isMissing: !getDefinitionItems("wbs", projectId).length,
+    },
+  ];
+
+  return requirements.filter((requirement) => requirement.isMissing).map((requirement) => requirement.label);
+};
+
+const getMissingDeliverableRequirementsSummary = (
+  projectId,
+  action = "adding deliverables",
+) => {
+  const missingRequirements = getMissingDeliverableRequirements(projectId);
+
+  return {
+    missingRequirements,
+    message: missingRequirements.length
+      ? `Create at least one ${formatLabelList(missingRequirements)} before ${action}.`
+      : "",
+    subject: missingRequirements.map(formatDefinitionLabel).join(" · "),
+  };
+};
+
+const showMissingDeliverableRequirementsFeedback = (projectId) => {
+  const { missingRequirements, message, subject } = getMissingDeliverableRequirementsSummary(
+    projectId,
+    "opening the deliverable form",
+  );
+
+  if (!missingRequirements.length) {
+    return false;
+  }
+
+  openConfirmationModal({
+    eyebrow: "Missing setup",
+    title: "Cannot create deliverable",
+    message,
+    subjectLabel: "Missing definitions",
+    subject,
+    confirmLabel: "Close",
+    confirmVariant: "primary",
+    cancelHidden: true,
+    onConfirm: () => {},
+  });
+
+  return true;
+};
+
+const getDeliverableColumnDisplayValue = (column, deliverable, projectId) =>
+  column.getDisplayValue(deliverable, projectId);
+
+const getDeliverableColumnSortValue = (column, deliverable, projectId) =>
+  (column.getSortValue ?? column.getDisplayValue)(deliverable, projectId);
+
+const compareDeliverableValues = (leftValue, rightValue) => {
+  const left = String(leftValue ?? "").trim();
+  const right = String(rightValue ?? "").trim();
+
+  if (!left && !right) {
+    return 0;
+  }
+
+  if (!left) {
+    return 1;
+  }
+
+  if (!right) {
+    return -1;
+  }
+
+  return left.localeCompare(right, undefined, {
+    sensitivity: "base",
+    numeric: true,
+  });
+};
+
+const renderSelectOptions = (options, selectedValue = "", placeholderLabel = null) => `
+  ${
+    placeholderLabel !== null
+      ? `
+        <option value="" ${selectedValue ? "" : "selected"}>
+          ${escapeHtml(placeholderLabel)}
+        </option>
+      `
+      : ""
+  }
+  ${options
+    .map(
+      (option) => `
+        <option value="${escapeHtml(option.value)}" ${option.value === selectedValue ? "selected" : ""}>
+          ${escapeHtml(option.label)}
+        </option>
+      `,
+    )
+    .join("")}
+`;
+
+const renderDeliverableSelectField = ({
+  key,
+  label,
+  options,
+  value = "",
+  placeholderLabel,
+  required = false,
+  disabled = false,
+}) => `
+  <label class="field">
+    <span>${escapeHtml(label)}</span>
+    <select
+      data-deliverable-field="${key}"
+      ${required ? "required" : ""}
+      ${disabled ? "disabled" : ""}
+    >
+      ${renderSelectOptions(options, value, placeholderLabel)}
+    </select>
+  </label>
+`;
+
+const renderDeliverableForm = (project) => `
+  <form class="deliverable-form" id="deliverableForm">
+    <div class="deliverable-form-grid">
+      <label class="field">
+        <span>Deliverable code</span>
+        <input
+          type="text"
+          data-deliverable-field="code"
+          placeholder="DRW-001"
+          autocomplete="off"
+          required
+        />
+      </label>
+      ${renderDeliverableSelectField({
+        key: "typeId",
+        label: "Type",
+        options: getDefinitionOptions("types", project.id),
+        placeholderLabel: getDefinitionItems("types", project.id).length
+          ? "Select a type"
+          : "Add a type first",
+        required: true,
+        disabled: !getDefinitionItems("types", project.id).length,
+      })}
+      ${renderDeliverableSelectField({
+        key: "ruleSetId",
+        label: "Lifecycle Stages",
+        options: getRuleSetOptions(project.id),
+        placeholderLabel: getRuleSets(project.id).length
+          ? "Select a lifecycle stage set"
+          : "Add a lifecycle stage set first",
+        required: true,
+        disabled: !getRuleSets(project.id).length,
+      })}
+      ${renderDeliverableSelectField({
+        key: "phaseId",
+        label: "Phase",
+        options: getDefinitionOptions("phases", project.id),
+        placeholderLabel: getDefinitionItems("phases", project.id).length
+          ? "Select a phase"
+          : "Add a phase first",
+        required: true,
+        disabled: !getDefinitionItems("phases", project.id).length,
+      })}
+      ${renderDeliverableSelectField({
+        key: "wbsId",
+        label: "WBS",
+        options: getDefinitionOptions("wbs", project.id),
+        placeholderLabel: getDefinitionItems("wbs", project.id).length
+          ? "Select a WBS item"
+          : "Add a WBS item first",
+        required: true,
+        disabled: !getDefinitionItems("wbs", project.id).length,
+      })}
+      ${renderDeliverableSelectField({
+        key: "packageId",
+        label: "Package",
+        options: getDefinitionOptions("packages", project.id),
+        placeholderLabel: "No package",
+      })}
+    </div>
+    <div class="deliverable-form-actions">
+      <button class="definition-action" type="button" data-action="cancel-deliverable-modal">
+        Cancel
+      </button>
+      <button class="primary-button" type="submit">
+        Create deliverable
+      </button>
+    </div>
+  </form>
+`;
+
+const renderDeliverableModalContent = (project) => `
+  <div class="deliverable-modal-shell">
+    <div
+      class="deliverable-modal-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="deliverableModalTitle"
+      aria-describedby="deliverableModalMessage"
+    >
+      <div class="deliverable-modal-head">
+        <div class="deliverable-modal-copy">
+          <p class="confirmation-dialog-eyebrow">New deliverable</p>
+          <h3 class="confirmation-dialog-title" id="deliverableModalTitle">Create deliverable</h3>
+          <p class="confirmation-dialog-message" id="deliverableModalMessage">
+            Add a deliverable to ${escapeHtml(project.name)}.
+          </p>
+        </div>
+        <button
+          class="definition-action"
+          type="button"
+          data-action="cancel-deliverable-modal"
+          aria-label="Close create deliverable dialog"
+        >
+          Close
+        </button>
+      </div>
+      ${renderDeliverableForm(project)}
+    </div>
+  </div>
+`;
+
+const getFilteredSortedDeliverables = (projectId) => {
+  const allDeliverables = [...getDeliverables(projectId)];
+  const { filters, sortBy, sortDirection } = deliverablesTableState;
+
+  const filteredDeliverables = allDeliverables.filter((deliverable) =>
+    deliverableColumns.every((column) => {
+      const filterValue = filters[column.key];
+
+      if (!filterValue) {
+        return true;
+      }
+
+      if (column.filterKind === "text") {
+        return getDeliverableColumnDisplayValue(column, deliverable, projectId)
+          .toLowerCase()
+          .includes(filterValue.toLowerCase());
+      }
+
+      if (column.key === "packageId" && filterValue === "__none__") {
+        return !deliverable.packageId;
+      }
+
+      return String(deliverable[column.key] ?? "") === filterValue;
+    }),
+  );
+
+  const activeSortColumn =
+    deliverableColumns.find((column) => column.key === sortBy) ?? deliverableColumns[0];
+
+  return filteredDeliverables.sort((leftDeliverable, rightDeliverable) => {
+    const comparison = compareDeliverableValues(
+      getDeliverableColumnSortValue(activeSortColumn, leftDeliverable, projectId),
+      getDeliverableColumnSortValue(activeSortColumn, rightDeliverable, projectId),
+    );
+
+    if (comparison !== 0) {
+      return sortDirection === "asc" ? comparison : -comparison;
+    }
+
+    return compareDeliverableValues(leftDeliverable.code, rightDeliverable.code);
+  });
+};
+
+const renderDeliverablesTableSection = (project) => {
+  const allDeliverables = getDeliverables(project.id);
+  const filteredDeliverables = getFilteredSortedDeliverables(project.id);
+  const hasFilters = Object.values(deliverablesTableState.filters).some(Boolean);
+
+  return `
+    <div class="deliverables-table-head">
+      <div class="definition-list-head">
+        <p class="definition-list-title">Deliverables</p>
+        <span class="definition-list-count">${allDeliverables.length}</span>
+      </div>
+      <button
+        class="primary-button"
+        type="button"
+        data-action="open-deliverable-modal"
+      >
+        Create deliverable
+      </button>
+    </div>
+    <div class="deliverables-table-wrap">
+      <table class="deliverables-table">
+        <thead>
+          <tr>
+            ${deliverableColumns
+              .map((column) => {
+                const isActiveSort = deliverablesTableState.sortBy === column.key;
+                const sortIndicator = isActiveSort
+                  ? deliverablesTableState.sortDirection === "asc"
+                    ? "↑"
+                    : "↓"
+                  : "↕";
+
+                return `
+                  <th scope="col" aria-sort="${isActiveSort ? (deliverablesTableState.sortDirection === "asc" ? "ascending" : "descending") : "none"}">
+                    <button
+                      class="deliverables-sort-button"
+                      type="button"
+                      data-action="sort-deliverables"
+                      data-sort-key="${column.key}"
+                    >
+                      <span>${escapeHtml(column.label)}</span>
+                      <span class="deliverables-sort-indicator" aria-hidden="true">${sortIndicator}</span>
+                    </button>
+                  </th>
+                `;
+              })
+              .join("")}
+          </tr>
+          <tr class="deliverables-filter-row">
+            ${deliverableColumns
+              .map((column) => `
+                <th scope="col">
+                  ${
+                    column.filterKind === "text"
+                      ? `
+                        <input
+                          class="deliverables-filter-control"
+                          type="search"
+                          data-deliverable-filter="${column.key}"
+                          value="${escapeHtml(deliverablesTableState.filters[column.key])}"
+                          placeholder="Filter ${escapeHtml(column.label.toLowerCase())}"
+                          autocomplete="off"
+                        />
+                      `
+                      : `
+                        <select
+                          class="deliverables-filter-control"
+                          data-deliverable-filter="${column.key}"
+                        >
+                          ${renderSelectOptions(
+                            column.getFilterOptions(project.id),
+                            deliverablesTableState.filters[column.key],
+                            `Any ${column.label.toLowerCase()}`,
+                          )}
+                        </select>
+                      `
+                  }
+                </th>
+              `)
+              .join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${
+            filteredDeliverables.length
+              ? filteredDeliverables
+                  .map(
+                    (deliverable) => `
+                      <tr>
+                        ${deliverableColumns
+                          .map(
+                            (column) => `
+                              <td>${escapeHtml(getDeliverableColumnDisplayValue(column, deliverable, project.id))}</td>
+                            `,
+                          )
+                          .join("")}
+                      </tr>
+                    `,
+                  )
+                  .join("")
+              : `
+                  <tr>
+                    <td class="deliverables-empty-cell" colspan="${deliverableColumns.length}">
+                      ${
+                        hasFilters
+                          ? "No deliverables match the current filters."
+                          : `No deliverables yet for ${escapeHtml(project.name)}.`
+                      }
+                    </td>
+                  </tr>
+                `
+          }
+        </tbody>
+      </table>
+    </div>
+  `;
+};
+
+const renderDeliverablesBody = (project) => {
+  const { missingRequirements, message } = getMissingDeliverableRequirementsSummary(project.id);
+
+  return `
+    <section class="definition-stack">
+      ${
+        missingRequirements.length
+          ? `
+            <div class="workspace-note">
+              ${escapeHtml(message)}
+            </div>
+          `
+          : ""
+      }
+
+      <section class="definition-list-shell" id="deliverablesTableSection">
+        ${renderDeliverablesTableSection(project)}
       </section>
     </section>
   `;
@@ -1118,20 +1780,14 @@ const renderProjectEditorBody = () => {
 const viewMeta = {
   deliverables: {
     title: "Deliverables",
-    body: (project) => `
-      <div class="workspace-note">
-        Active project: <strong>${escapeHtml(project.name)}</strong> (${escapeHtml(
-          project.code || "No code",
-        )}). This workspace will hold the compact lifecycle list for that project.
-      </div>
-    `,
+    body: (project) => renderDeliverablesBody(project),
   },
   types: {
     title: "Deliverable Types",
     body: (project) => renderDefinitionBody("types", project),
   },
   "rules-of-credit": {
-    title: "Rules of Credit",
+    title: "Lifecycle Stages",
     body: (project) => renderRulesOfCreditBody(project),
   },
   phases: {
@@ -1159,7 +1815,7 @@ const viewMeta = {
     copy: () =>
       projectEditorProjectId
         ? "Update the selected project's name, code, or status. Deletion removes its project-scoped data."
-        : "Create a project record first, then define its phases, WBS items, packages, roles, members, deliverable types, and rules of credit.",
+        : "Create a project record first, then define its phases, WBS items, packages, roles, members, deliverable types, and lifecycle stages.",
     eyebrow: "Projects",
     body: () => renderProjectEditorBody(),
   },
@@ -1199,14 +1855,14 @@ const validateRuleSetForm = (form, projectId, excludingId = null) => {
   if (!payload.name) {
     return {
       field: ruleSetNameInput,
-      message: "Rule set name is required.",
+      message: "Lifecycle stage set name is required.",
     };
   }
 
   if (hasDuplicateRuleSet(projectId, payload.name, excludingId)) {
     return {
       field: ruleSetNameInput,
-      message: "A rule set with this name already exists in the selected project.",
+      message: "A lifecycle stage set with this name already exists in the selected project.",
     };
   }
 
@@ -1231,7 +1887,7 @@ const validateRuleSetForm = (form, projectId, excludingId = null) => {
     if (seenStageNames.has(normalizedStageName)) {
       return {
         field: nameInput,
-        message: "Stage names must be unique within a rule set.",
+        message: "Stage names must be unique within a lifecycle stage set.",
       };
     }
 
@@ -1291,6 +1947,10 @@ const validateProjectValues = ({ name, code }, excludingId = null) => {
 };
 
 const renderView = () => {
+  if (currentView !== "deliverables") {
+    closeDeliverableModal({ restoreFocus: false });
+  }
+
   const config = viewMeta[currentView];
   const eyebrow =
     typeof config.eyebrow === "function" ? config.eyebrow(currentProject) : config.eyebrow;
@@ -1303,6 +1963,7 @@ const renderView = () => {
   workspaceTitle.textContent = title;
   workspaceCopy.textContent = copy;
   workspaceCopy.hidden = !copy;
+  workspacePanel.classList.toggle("workspace-panel-wide", currentView === "deliverables");
   workspaceBody.innerHTML = body;
   workspaceBody.hidden = !body;
   bindViewInteractions();
@@ -1582,6 +2243,237 @@ const bindRuleSetView = () => {
   focusFirstField("#ruleSetCreateForm [data-ruleset-name]");
 };
 
+const collectDeliverableFormData = (form) => ({
+  code: form.querySelector('[data-deliverable-field="code"]')?.value.trim() ?? "",
+  typeId: form.querySelector('[data-deliverable-field="typeId"]')?.value.trim() ?? "",
+  ruleSetId: form.querySelector('[data-deliverable-field="ruleSetId"]')?.value.trim() ?? "",
+  phaseId: form.querySelector('[data-deliverable-field="phaseId"]')?.value.trim() ?? "",
+  wbsId: form.querySelector('[data-deliverable-field="wbsId"]')?.value.trim() ?? "",
+  packageId: form.querySelector('[data-deliverable-field="packageId"]')?.value.trim() ?? "",
+});
+
+const validateDeliverableForm = (form, projectId) => {
+  const values = collectDeliverableFormData(form);
+  const { missingRequirements, message: missingRequirementsMessage } =
+    getMissingDeliverableRequirementsSummary(projectId);
+
+  if (!values.code) {
+    return {
+      field: "code",
+      message: "Deliverable code is required.",
+    };
+  }
+
+  if (
+    getDeliverables(projectId).some(
+      (deliverable) => normalizeValue(deliverable.code) === normalizeValue(values.code),
+    )
+  ) {
+    return {
+      field: "code",
+      message: "A deliverable with this code already exists in the selected project.",
+    };
+  }
+
+  if (missingRequirements.length) {
+    return {
+      field: "typeId",
+      message: missingRequirementsMessage,
+    };
+  }
+
+  if (!findDefinitionItem("types", projectId, values.typeId)) {
+    return {
+      field: "typeId",
+      message: "Choose a valid deliverable type.",
+    };
+  }
+
+  if (!findRuleSet(projectId, values.ruleSetId)) {
+    return {
+      field: "ruleSetId",
+      message: "Choose a valid lifecycle stage set.",
+    };
+  }
+
+  if (!findDefinitionItem("phases", projectId, values.phaseId)) {
+    return {
+      field: "phaseId",
+      message: "Choose a valid phase.",
+    };
+  }
+
+  if (!findDefinitionItem("wbs", projectId, values.wbsId)) {
+    return {
+      field: "wbsId",
+      message: "Choose a valid WBS item.",
+    };
+  }
+
+  if (values.packageId && !findDefinitionItem("packages", projectId, values.packageId)) {
+    return {
+      field: "packageId",
+      message: "Choose a valid package.",
+    };
+  }
+
+  return {
+    payload: {
+      code: values.code,
+      typeId: values.typeId,
+      ruleSetId: values.ruleSetId,
+      phaseId: values.phaseId,
+      wbsId: values.wbsId,
+      packageId: values.packageId || null,
+    },
+  };
+};
+
+const bindDeliverablesTableControls = () => {
+  const sortButtons = workspaceBody.querySelectorAll('[data-action="sort-deliverables"]');
+  const filterControls = workspaceBody.querySelectorAll("[data-deliverable-filter]");
+
+  sortButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const sortKey = button.dataset.sortKey;
+
+      if (!sortKey) {
+        return;
+      }
+
+      if (deliverablesTableState.sortBy === sortKey) {
+        deliverablesTableState.sortDirection =
+          deliverablesTableState.sortDirection === "asc" ? "desc" : "asc";
+      } else {
+        deliverablesTableState.sortBy = sortKey;
+        deliverablesTableState.sortDirection = "asc";
+      }
+
+      updateDeliverablesTableSection();
+    });
+  });
+
+  filterControls.forEach((control) => {
+    const eventName = control instanceof HTMLSelectElement ? "change" : "input";
+
+    control.addEventListener(eventName, () => {
+      const filterKey = control.dataset.deliverableFilter;
+
+      if (!filterKey) {
+        return;
+      }
+
+      deliverablesTableState.filters[filterKey] = control.value;
+      updateDeliverablesTableSection({
+        focusFilterKey: filterKey,
+      });
+    });
+  });
+};
+
+const updateDeliverablesTableSection = ({ focusFilterKey = null } = {}) => {
+  const tableSection = document.getElementById("deliverablesTableSection");
+
+  if (!tableSection) {
+    return;
+  }
+
+  const activeElement = document.activeElement;
+  const resolvedFocusFilterKey =
+    focusFilterKey ??
+    (activeElement instanceof HTMLElement ? activeElement.dataset.deliverableFilter ?? null : null);
+  const selectionStart =
+    activeElement instanceof HTMLInputElement ? activeElement.selectionStart ?? null : null;
+  const selectionEnd =
+    activeElement instanceof HTMLInputElement ? activeElement.selectionEnd ?? null : null;
+
+  tableSection.innerHTML = renderDeliverablesTableSection(currentProject);
+  bindDeliverablesView();
+
+  if (!resolvedFocusFilterKey) {
+    return;
+  }
+
+  const nextControl = tableSection.querySelector(
+    `[data-deliverable-filter="${resolvedFocusFilterKey}"]`,
+  );
+
+  if (!(nextControl instanceof HTMLElement)) {
+    return;
+  }
+
+  nextControl.focus();
+
+  if (
+    nextControl instanceof HTMLInputElement &&
+    selectionStart !== null &&
+    selectionEnd !== null
+  ) {
+    nextControl.setSelectionRange(
+      Math.min(selectionStart, nextControl.value.length),
+      Math.min(selectionEnd, nextControl.value.length),
+    );
+  }
+};
+
+const bindDeliverableForm = (form) => {
+  if (!form) {
+    return;
+  }
+
+  form.addEventListener("input", (event) => {
+    if (
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLTextAreaElement ||
+      event.target instanceof HTMLSelectElement
+    ) {
+      event.target.setCustomValidity("");
+    }
+  });
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const validation = validateDeliverableForm(form, currentProject.id);
+
+    if (!("payload" in validation)) {
+      const field = form.querySelector(`[data-deliverable-field="${validation.field}"]`);
+      showFieldError(field, validation.message);
+      return;
+    }
+
+    getDeliverables(currentProject.id).push({
+      id: crypto.randomUUID(),
+      ...validation.payload,
+    });
+    closeDeliverableModal();
+    updateDeliverablesTableSection();
+  });
+};
+
+const bindDeliverableModal = () => {
+  const form = deliverableModal.querySelector("#deliverableForm");
+  const closeButtons = deliverableModal.querySelectorAll('[data-action="cancel-deliverable-modal"]');
+
+  bindDeliverableForm(form);
+
+  closeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      closeDeliverableModal();
+    });
+  });
+};
+
+const bindDeliverablesView = () => {
+  const openButton = workspaceBody.querySelector('[data-action="open-deliverable-modal"]');
+
+  bindDeliverablesTableControls();
+
+  openButton?.addEventListener("click", () => {
+    openDeliverableModal();
+  });
+};
+
 const slugify = (value) =>
   value
     .toLowerCase()
@@ -1660,6 +2552,7 @@ const bindProjectEditorView = () => {
       projects = [...projects, project];
       projectStateStore[project.id] = createProjectState();
       currentProject = project;
+      resetDeliverablesTableState();
     }
 
     currentView = "deliverables";
@@ -1686,6 +2579,11 @@ const bindProjectEditorView = () => {
 };
 
 const bindViewInteractions = () => {
+  if (currentView === "deliverables") {
+    bindDeliverablesView();
+    return;
+  }
+
   if (definitionConfigs[currentView]) {
     bindDefinitionView(currentView);
     return;
@@ -1726,6 +2624,8 @@ projectOptionList.addEventListener("click", (event) => {
 
   currentProject =
     projects.find((project) => project.id === option.dataset.projectId) ?? currentProject;
+  closeDeliverableModal({ restoreFocus: false });
+  resetDeliverablesTableState();
   resetDefinitionEditingState();
   closeProjectEditor();
 
@@ -1771,6 +2671,12 @@ confirmationDialogConfirm.addEventListener("click", () => {
   onConfirm?.();
 });
 
+deliverableModal.addEventListener("click", (event) => {
+  if (event.target === deliverableModal) {
+    closeDeliverableModal();
+  }
+});
+
 confirmationModal.addEventListener("click", (event) => {
   if (event.target === confirmationModal) {
     closeConfirmationModal();
@@ -1778,6 +2684,12 @@ confirmationModal.addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && isDeliverableModalOpen()) {
+    event.preventDefault();
+    closeDeliverableModal();
+    return;
+  }
+
   if (event.key === "Escape" && isConfirmationModalOpen()) {
     event.preventDefault();
     closeConfirmationModal();
