@@ -336,7 +336,7 @@ const definitionConfigs = {
     inlineEdit: true,
     listTitle: "Defined members",
     emptyMessage: (project) => `No members yet for ${project.name}.`,
-    getDisplayName: (item, { projectId }) => `${item.name} · ${getRoleDisplayName(projectId, item.roleId)}`,
+    getDisplayName: (item) => item.name,
     fields: [
       {
         key: "name",
@@ -344,24 +344,13 @@ const definitionConfigs = {
         placeholder: "Jamie Chen",
         required: true,
       },
-      {
-        key: "roleId",
-        label: "Role",
-        type: "select",
-        required: true,
-        options: ({ projectId }) => getRoleOptions(projectId),
-        placeholderOption: ({ projectId }) =>
-          getRoles(projectId).length ? "Select a role" : "Add a role first",
-        isDisabled: ({ projectId }) => !getRoles(projectId).length,
-      },
     ],
-    renderSummary: (item, { projectId }) => `
+    renderSummary: (item) => `
       <div class="definition-copy-stack">
         <strong>${escapeHtml(item.name)}</strong>
-        <span>${escapeHtml(getRoleDisplayName(projectId, item.roleId))}</span>
       </div>
     `,
-    validate(values, { projectId }) {
+    validate(values) {
       if (!values.name) {
         return {
           field: "name",
@@ -369,31 +358,9 @@ const definitionConfigs = {
         };
       }
 
-      if (!getRoles(projectId).length) {
-        return {
-          field: "roleId",
-          message: "Add at least one role before creating members.",
-        };
-      }
-
-      if (!values.roleId) {
-        return {
-          field: "roleId",
-          message: "Role is required.",
-        };
-      }
-
-      if (!findRole(projectId, values.roleId)) {
-        return {
-          field: "roleId",
-          message: "Choose a valid role.",
-        };
-      }
-
       return {
         payload: {
           name: values.name,
-          roleId: values.roleId,
         },
       };
     },
@@ -439,26 +406,11 @@ const getDeliverables = (projectId) => getProjectState(projectId).deliverables;
 
 const getRoles = (projectId) => getProjectState(projectId).roles;
 
-const getMembers = (projectId) => getProjectState(projectId).members;
-
 const findDefinitionItem = (view, projectId, itemId) =>
   getDefinitionItems(view, projectId).find((item) => item.id === itemId);
 
 const findRuleSet = (projectId, ruleSetId) =>
   getRuleSets(projectId).find((item) => item.id === ruleSetId);
-
-const findRole = (projectId, roleId) => getRoles(projectId).find((item) => item.id === roleId);
-
-const getRoleOptions = (projectId) =>
-  getRoles(projectId).map((role) => ({
-    value: role.id,
-    label: role.name,
-  }));
-
-const getRoleDisplayName = (projectId, roleId) => findRole(projectId, roleId)?.name ?? "Unknown role";
-
-const getMembersForRole = (projectId, roleId) =>
-  getMembers(projectId).filter((member) => member.roleId === roleId);
 
 const getDefinitionDisplayName = (view, projectId, itemId) => {
   const config = definitionConfigs[view];
@@ -689,23 +641,6 @@ const requestDefinitionDeletion = (view, itemId) => {
 
   if (!config || !item) {
     return;
-  }
-
-  if (view === "roles") {
-    const membersUsingRole = getMembersForRole(currentProject.id, itemId);
-
-    if (membersUsingRole.length) {
-      openConfirmationModal({
-        title: "Cannot delete role",
-        message: `Reassign or remove ${pluralize(membersUsingRole.length, "member")} before deleting this role from ${currentProject.name}.`,
-        subject: item.name,
-        confirmLabel: "Close",
-        confirmVariant: "primary",
-        cancelHidden: true,
-        onConfirm: () => {},
-      });
-      return;
-    }
   }
 
   const deliverableReferenceFieldMap = {
@@ -1425,6 +1360,64 @@ const renderSelectOptions = (options, selectedValue = "", placeholderLabel = nul
     .join("")}
 `;
 
+const renderDeliverableFilterControl = (column, projectId) => {
+  const filterLabel = `Filter ${column.label.toLowerCase()}`;
+
+  if (column.filterKind === "text") {
+    return `
+      <input
+        class="deliverables-filter-control"
+        type="search"
+        data-deliverable-filter="${column.key}"
+        value="${escapeHtml(deliverablesTableState.filters[column.key])}"
+        placeholder="Filter"
+        autocomplete="off"
+        aria-label="${escapeHtml(filterLabel)}"
+      />
+    `;
+  }
+
+  return `
+    <select
+      class="deliverables-filter-control"
+      data-deliverable-filter="${column.key}"
+      aria-label="${escapeHtml(filterLabel)}"
+    >
+      ${renderSelectOptions(
+        column.getFilterOptions(projectId),
+        deliverablesTableState.filters[column.key],
+        "All",
+      )}
+    </select>
+  `;
+};
+
+const renderDeliverableHeaderCell = (column, projectId) => {
+  const isActiveSort = deliverablesTableState.sortBy === column.key;
+  const sortIndicator = isActiveSort
+    ? deliverablesTableState.sortDirection === "asc"
+      ? "↑"
+      : "↓"
+    : "↕";
+
+  return `
+    <th scope="col" aria-sort="${isActiveSort ? (deliverablesTableState.sortDirection === "asc" ? "ascending" : "descending") : "none"}">
+      <div class="deliverables-header-cell">
+        <button
+          class="deliverables-sort-button${isActiveSort ? " is-active" : ""}"
+          type="button"
+          data-action="sort-deliverables"
+          data-sort-key="${column.key}"
+        >
+          <span>${escapeHtml(column.label)}</span>
+          <span class="deliverables-sort-indicator" aria-hidden="true">${sortIndicator}</span>
+        </button>
+        ${renderDeliverableFilterControl(column, projectId)}
+      </div>
+    </th>
+  `;
+};
+
 const renderDeliverableSelectField = ({
   key,
   label,
@@ -1614,63 +1607,7 @@ const renderDeliverablesTableSection = (project) => {
       <table class="deliverables-table">
         <thead>
           <tr>
-            ${deliverableColumns
-              .map((column) => {
-                const isActiveSort = deliverablesTableState.sortBy === column.key;
-                const sortIndicator = isActiveSort
-                  ? deliverablesTableState.sortDirection === "asc"
-                    ? "↑"
-                    : "↓"
-                  : "↕";
-
-                return `
-                  <th scope="col" aria-sort="${isActiveSort ? (deliverablesTableState.sortDirection === "asc" ? "ascending" : "descending") : "none"}">
-                    <button
-                      class="deliverables-sort-button"
-                      type="button"
-                      data-action="sort-deliverables"
-                      data-sort-key="${column.key}"
-                    >
-                      <span>${escapeHtml(column.label)}</span>
-                      <span class="deliverables-sort-indicator" aria-hidden="true">${sortIndicator}</span>
-                    </button>
-                  </th>
-                `;
-              })
-              .join("")}
-          </tr>
-          <tr class="deliverables-filter-row">
-            ${deliverableColumns
-              .map((column) => `
-                <th scope="col">
-                  ${
-                    column.filterKind === "text"
-                      ? `
-                        <input
-                          class="deliverables-filter-control"
-                          type="search"
-                          data-deliverable-filter="${column.key}"
-                          value="${escapeHtml(deliverablesTableState.filters[column.key])}"
-                          placeholder="Filter ${escapeHtml(column.label.toLowerCase())}"
-                          autocomplete="off"
-                        />
-                      `
-                      : `
-                        <select
-                          class="deliverables-filter-control"
-                          data-deliverable-filter="${column.key}"
-                        >
-                          ${renderSelectOptions(
-                            column.getFilterOptions(project.id),
-                            deliverablesTableState.filters[column.key],
-                            `Any ${column.label.toLowerCase()}`,
-                          )}
-                        </select>
-                      `
-                  }
-                </th>
-              `)
-              .join("")}
+            ${deliverableColumns.map((column) => renderDeliverableHeaderCell(column, project.id)).join("")}
           </tr>
         </thead>
         <tbody>

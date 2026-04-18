@@ -224,6 +224,11 @@ These are examples only. The system must remain configurable.
 
 Assignments use project-scoped roles and project-scoped members. A deliverable can only reference members that belong to the same project.
 
+Important rule:
+
+- member definitions do not carry a fixed role
+- roles are applied through deliverable assignment requirements, not on the member record itself
+
 ---
 
 ## Comments / Follow-Up
