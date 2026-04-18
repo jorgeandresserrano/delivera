@@ -896,7 +896,6 @@ const renderProjectEditorBody = () => {
 const viewMeta = {
   deliverables: {
     title: "Deliverables",
-    copy: "Track staged deliverables, ownership, due dates, and follow-up against the selected project.",
     body: (project) => `
       <div class="workspace-note">
         Active project: <strong>${escapeHtml(project.name)}</strong> (${escapeHtml(
@@ -907,27 +906,22 @@ const viewMeta = {
   },
   types: {
     title: "Deliverable Types",
-    copy: "Define project-scoped deliverable categories before records are created.",
     body: (project) => renderDefinitionBody("types", project),
   },
   "rules-of-credit": {
     title: "Rules of Credit",
-    copy: "Create reusable rule-set templates made up of ordered stages.",
     body: (project) => renderRulesOfCreditBody(project),
   },
   phases: {
     title: "Phases",
-    copy: "Keep informational project phases configurable per project for filtering and reporting.",
     body: (project) => renderDefinitionBody("phases", project),
   },
   wbs: {
     title: "WBS",
-    copy: "Define unique WBS codes and names per project before deliverables are created.",
     body: (project) => renderDefinitionBody("wbs", project),
   },
   packages: {
     title: "Packages",
-    copy: "Define the construction packages that deliverables can belong to within this project.",
     body: (project) => renderDefinitionBody("packages", project),
   },
   "project-editor": {
