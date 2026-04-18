@@ -35,7 +35,8 @@ Important rule:
 
 - business master data is project-scoped
 - nothing is reused across projects
-- users are global and can be assigned across projects
+- every definition, member, and deliverable exists inside exactly one project
+- project data is never shared across projects
 
 ---
 
@@ -57,7 +58,7 @@ Each deliverable must belong to:
 Each deliverable must also have:
 
 - a business code
-- assigned users
+- assigned project members
 - stage-by-stage expected dates
 - stage-by-stage actual completion dates
 - follow-up comments
@@ -221,7 +222,7 @@ Example role templates:
 
 These are examples only. The system must remain configurable.
 
-Users are the same entity for authentication and assignment. There is no separate People table in v1.
+Assignments use project-scoped roles and project-scoped members. A deliverable can only reference members that belong to the same project.
 
 ---
 
@@ -281,7 +282,7 @@ Permissions in v1 are intentionally simple:
 - `owner`: full create, edit, archive, and delete access where allowed
 - `viewer`: read-only access
 
-There is one users table for both authenticated users and deliverable assignees.
+Authentication can remain separate, but assignment members in the business model are project-scoped and are not shared across projects.
 
 ---
 
@@ -321,10 +322,6 @@ This ensures the operational state always starts from a complete and consistent 
 
 ## Data Model (Conceptual)
 
-### Global
-
-- User
-
 ### Project-Scoped Definitions
 
 - Project
@@ -333,6 +330,8 @@ This ensures the operational state always starts from a complete and consistent 
 - ProjectPhase
 - WBSItem
 - ConstructionPackage
+- Role
+- Member
 - LifecycleStageSet
 - LifecycleStageTemplate
 
@@ -343,6 +342,11 @@ This ensures the operational state always starts from a complete and consistent 
 - DeliverableAssignment
 - DeliverableComment
 - AuditLog
+
+Important rule:
+
+- operational records are project-scoped through their parent deliverable
+- no business record exists outside a project container
 
 ---
 
@@ -379,6 +383,7 @@ Delivera is a secure, relational, project-based application where:
 
 - all business master data is configurable and project-scoped
 - each deliverable belongs to a project, type, phase, WBS item, construction package, and lifecycle stage set
+- no definitions, members, or deliverables are shared across projects
 - lifecycle stage sets define ordered stage templates and never store dates
 - each deliverable owns instantiated stage records with expected dates, actual dates, and explicit status
 - the current stage is derived from those stage records

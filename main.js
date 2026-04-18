@@ -45,16 +45,35 @@ const createProjectFromOption = (option) => ({
   archived: option.dataset.projectArchived === "true",
 });
 
-const createProjectState = () => ({
-  deliverables: [],
-  types: [],
-  phases: [],
-  wbs: [],
-  packages: [],
-  roles: [],
-  members: [],
-  ruleSets: [],
+const PROJECT_SCOPED_COLLECTION_KEYS = Object.freeze([
+  "deliverables",
+  "types",
+  "phases",
+  "wbs",
+  "packages",
+  "roles",
+  "members",
+  "ruleSets",
+]);
+
+const createProjectState = () =>
+  Object.fromEntries(PROJECT_SCOPED_COLLECTION_KEYS.map((key) => [key, []]));
+
+const createProjectScopedEntity = (projectId, payload) => ({
+  id: crypto.randomUUID(),
+  projectId,
+  ...payload,
 });
+
+const normalizeProjectScopedCollection = (projectId, collection = []) => {
+  collection.forEach((item) => {
+    if (item && typeof item === "object") {
+      item.projectId = projectId;
+    }
+  });
+
+  return collection;
+};
 
 const createEmptyStage = () => ({
   name: "",
@@ -403,7 +422,13 @@ const getProjectState = (projectId) => {
     projectStateStore[projectId] = createProjectState();
   }
 
-  return projectStateStore[projectId];
+  const projectState = projectStateStore[projectId];
+
+  PROJECT_SCOPED_COLLECTION_KEYS.forEach((key) => {
+    projectState[key] = normalizeProjectScopedCollection(projectId, projectState[key]);
+  });
+
+  return projectState;
 };
 
 const getDefinitionItems = (view, projectId) => getProjectState(projectId)[view];
@@ -792,7 +817,7 @@ const requestProjectDeletion = (projectId) => {
   openConfirmationModal({
     title: "Delete project?",
     message:
-      "This will remove the project and all of its project-scoped definitions from this prototype.",
+      "This will remove the project and all of its project-scoped definitions and deliverables from this prototype.",
     subject: project.code ? `${project.name} (${project.code})` : project.name,
     onConfirm: () => {
       deleteProject(projectId);
@@ -1814,7 +1839,7 @@ const viewMeta = {
     title: () => (projectEditorProjectId ? "Edit project" : "New project"),
     copy: () =>
       projectEditorProjectId
-        ? "Update the selected project's name, code, or status. Deletion removes its project-scoped data."
+        ? "Update the selected project's name, code, or status. Deletion removes its project-scoped definitions and deliverables."
         : "Create a project record first, then define its phases, WBS items, packages, roles, members, deliverable types, and lifecycle stages.",
     eyebrow: "Projects",
     body: () => renderProjectEditorBody(),
@@ -2048,10 +2073,7 @@ const bindDefinitionForm = (form, view) => {
 
       Object.assign(item, validation.payload);
     } else {
-      items.push({
-        id: crypto.randomUUID(),
-        ...validation.payload,
-      });
+      items.push(createProjectScopedEntity(currentProject.id, validation.payload));
     }
 
     editingDefinition = {
@@ -2202,10 +2224,9 @@ const bindRuleSetView = () => {
         ruleSet.stages = validation.payload.stages;
         editingRuleSetId = null;
       } else {
-        getRuleSets(currentProject.id).push({
-          id: crypto.randomUUID(),
-          ...validation.payload,
-        });
+        getRuleSets(currentProject.id).push(
+          createProjectScopedEntity(currentProject.id, validation.payload),
+        );
       }
 
       renderView();
@@ -2442,10 +2463,9 @@ const bindDeliverableForm = (form) => {
       return;
     }
 
-    getDeliverables(currentProject.id).push({
-      id: crypto.randomUUID(),
-      ...validation.payload,
-    });
+    getDeliverables(currentProject.id).push(
+      createProjectScopedEntity(currentProject.id, validation.payload),
+    );
     closeDeliverableModal();
     updateDeliverablesTableSection();
   });
