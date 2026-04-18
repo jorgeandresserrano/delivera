@@ -77,6 +77,10 @@
               </button>
             </div>
             <div class="project-divider"></div>
+            <button class="project-option project-option-manage" id="editProjectOption" type="button">
+              <strong>Edit current project</strong>
+              <span>Rename, archive, or delete</span>
+            </button>
             <button class="project-option project-option-add" id="addProjectOption" type="button">
               <strong>Add project</strong>
               <span>Create a new project</span>
@@ -109,6 +113,36 @@
           <div class="workspace-body" id="workspaceBody"></div>
         </section>
       </main>
+    </div>
+
+    <div class="confirmation-modal" id="confirmationModal" hidden>
+      <div
+        class="confirmation-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirmationDialogTitle"
+        aria-describedby="confirmationDialogMessage"
+      >
+        <p class="confirmation-dialog-eyebrow">Confirm deletion</p>
+        <h3 class="confirmation-dialog-title" id="confirmationDialogTitle">Delete item?</h3>
+        <p class="confirmation-dialog-message" id="confirmationDialogMessage"></p>
+        <div class="confirmation-dialog-subject">
+          <span class="confirmation-dialog-subject-label">Selected item</span>
+          <strong id="confirmationDialogSubject"></strong>
+        </div>
+        <div class="confirmation-dialog-actions">
+          <button class="definition-action" id="confirmationDialogCancel" type="button">
+            Cancel
+          </button>
+          <button
+            class="definition-action definition-action-danger-fill"
+            id="confirmationDialogConfirm"
+            type="button"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="main.js"></script>

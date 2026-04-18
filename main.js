@@ -4,6 +4,7 @@ const menuItems = [...document.querySelectorAll(".menu-item")];
 const projectTrigger = document.getElementById("projectTrigger");
 const projectDropdown = document.getElementById("projectDropdown");
 const projectOptionList = document.getElementById("projectOptionList");
+const editProjectOption = document.getElementById("editProjectOption");
 const addProjectOption = document.getElementById("addProjectOption");
 const activeProjectName = document.getElementById("activeProjectName");
 const activeProjectCode = document.getElementById("activeProjectCode");
@@ -11,6 +12,12 @@ const workspaceEyebrow = document.getElementById("workspaceEyebrow");
 const workspaceTitle = document.getElementById("workspaceTitle");
 const workspaceCopy = document.getElementById("workspaceCopy");
 const workspaceBody = document.getElementById("workspaceBody");
+const confirmationModal = document.getElementById("confirmationModal");
+const confirmationDialogTitle = document.getElementById("confirmationDialogTitle");
+const confirmationDialogMessage = document.getElementById("confirmationDialogMessage");
+const confirmationDialogSubject = document.getElementById("confirmationDialogSubject");
+const confirmationDialogCancel = document.getElementById("confirmationDialogCancel");
+const confirmationDialogConfirm = document.getElementById("confirmationDialogConfirm");
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -61,6 +68,7 @@ const definitionConfigs = {
     inlineEdit: true,
     listTitle: "Defined types",
     emptyMessage: (project) => `No deliverable types yet for ${project.name}.`,
+    getDisplayName: (item) => item.name,
     fields: [
       {
         key: "name",
@@ -100,6 +108,7 @@ const definitionConfigs = {
     inlineEdit: true,
     listTitle: "Defined phases",
     emptyMessage: (project) => `No project phases yet for ${project.name}.`,
+    getDisplayName: (item) => item.name,
     fields: [
       {
         key: "name",
@@ -139,6 +148,7 @@ const definitionConfigs = {
     inlineEdit: true,
     listTitle: "Defined WBS items",
     emptyMessage: (project) => `No WBS items yet for ${project.name}.`,
+    getDisplayName: (item) => `${item.code} · ${item.name}`,
     fields: [
       {
         key: "code",
@@ -197,6 +207,7 @@ const definitionConfigs = {
     inlineEdit: true,
     listTitle: "Defined packages",
     emptyMessage: (project) => `No construction packages yet for ${project.name}.`,
+    getDisplayName: (item) => (item.name ? `${item.code} · ${item.name}` : item.code),
     fields: [
       {
         key: "code",
@@ -244,6 +255,9 @@ const definitionConfigs = {
 
 let currentProject = projects[0];
 let currentView = "deliverables";
+let projectEditorProjectId = null;
+let pendingConfirmationAction = null;
+let confirmationReturnFocus = null;
 let editingDefinition = {
   view: null,
   itemId: null,
@@ -265,6 +279,9 @@ const getRuleSets = (projectId) => getProjectState(projectId).ruleSets;
 const findDefinitionItem = (view, projectId, itemId) =>
   getDefinitionItems(view, projectId).find((item) => item.id === itemId);
 
+const findRuleSet = (projectId, ruleSetId) =>
+  getRuleSets(projectId).find((item) => item.id === ruleSetId);
+
 const hasDuplicateDefinitionField = (view, projectId, field, value, excludingId = null) =>
   getDefinitionItems(view, projectId).some(
     (item) =>
@@ -276,12 +293,167 @@ const hasDuplicateRuleSet = (projectId, value, excludingId = null) =>
     (item) => item.id !== excludingId && normalizeValue(item.name) === normalizeValue(value),
   );
 
+const findProjectById = (projectId) => projects.find((project) => project.id === projectId) ?? null;
+
 const resetDefinitionEditingState = () => {
   editingDefinition = {
     view: null,
     itemId: null,
   };
   editingRuleSetId = null;
+};
+
+const closeProjectEditor = () => {
+  projectEditorProjectId = null;
+};
+
+const openProjectEditor = (projectId = null) => {
+  projectEditorProjectId = projectId;
+  currentView = "project-editor";
+  resetDefinitionEditingState();
+  setActiveMenu("");
+  renderView();
+  closeProjectDropdown();
+  closeSidebarOnMobile();
+};
+
+const isConfirmationModalOpen = () => !confirmationModal.hidden;
+
+const closeConfirmationModal = ({ restoreFocus = true } = {}) => {
+  if (!isConfirmationModalOpen()) {
+    pendingConfirmationAction = null;
+    confirmationReturnFocus = null;
+    return;
+  }
+
+  confirmationModal.hidden = true;
+  document.body.classList.remove("has-modal-open");
+
+  const nextFocusTarget = confirmationReturnFocus;
+  pendingConfirmationAction = null;
+  confirmationReturnFocus = null;
+
+  if (
+    restoreFocus &&
+    nextFocusTarget instanceof HTMLElement &&
+    document.contains(nextFocusTarget)
+  ) {
+    nextFocusTarget.focus();
+  }
+};
+
+const openConfirmationModal = ({ title, message, subject, confirmLabel = "Delete", onConfirm }) => {
+  pendingConfirmationAction = onConfirm;
+  confirmationReturnFocus =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  confirmationDialogTitle.textContent = title;
+  confirmationDialogMessage.textContent = message;
+  confirmationDialogSubject.textContent = subject;
+  confirmationDialogConfirm.textContent = confirmLabel;
+  confirmationModal.hidden = false;
+  document.body.classList.add("has-modal-open");
+  closeProjectDropdown();
+  closeSidebarOnMobile();
+
+  requestAnimationFrame(() => {
+    confirmationDialogCancel.focus();
+  });
+};
+
+const deleteDefinitionItem = (view, itemId) => {
+  getProjectState(currentProject.id)[view] = getDefinitionItems(view, currentProject.id).filter(
+    (item) => item.id !== itemId,
+  );
+
+  if (editingDefinition.view === view && editingDefinition.itemId === itemId) {
+    editingDefinition = {
+      view: null,
+      itemId: null,
+    };
+  }
+
+  renderView();
+};
+
+const requestDefinitionDeletion = (view, itemId) => {
+  const config = definitionConfigs[view];
+  const item = findDefinitionItem(view, currentProject.id, itemId);
+
+  if (!config || !item) {
+    return;
+  }
+
+  openConfirmationModal({
+    title: `Delete ${config.singular}?`,
+    message: `This will remove it from ${currentProject.name}. This action cannot be undone in this prototype.`,
+    subject: config.getDisplayName(item),
+    onConfirm: () => {
+      deleteDefinitionItem(view, itemId);
+    },
+  });
+};
+
+const deleteRuleSet = (ruleSetId) => {
+  getProjectState(currentProject.id).ruleSets = getRuleSets(currentProject.id).filter(
+    (item) => item.id !== ruleSetId,
+  );
+
+  if (editingRuleSetId === ruleSetId) {
+    editingRuleSetId = null;
+  }
+
+  renderView();
+};
+
+const requestRuleSetDeletion = (ruleSetId) => {
+  const ruleSet = findRuleSet(currentProject.id, ruleSetId);
+
+  if (!ruleSet) {
+    return;
+  }
+
+  openConfirmationModal({
+    title: "Delete rules of credit set?",
+    message: `This will remove the set and all of its stages from ${currentProject.name}. This action cannot be undone in this prototype.`,
+    subject: ruleSet.name,
+    onConfirm: () => {
+      deleteRuleSet(ruleSetId);
+    },
+  });
+};
+
+const deleteProject = (projectId) => {
+  projects = projects.filter((entry) => entry.id !== projectId);
+  delete projectStateStore[projectId];
+  currentProject = projects[0];
+  currentView = "deliverables";
+  closeProjectEditor();
+  resetDefinitionEditingState();
+  renderProjectOptions();
+  syncProjectSelection();
+  setActiveMenu(currentView);
+  renderView();
+  closeProjectDropdown();
+  closeSidebarOnMobile();
+};
+
+const requestProjectDeletion = (projectId) => {
+  const project = findProjectById(projectId);
+
+  if (!project || projects.length <= 1) {
+    return;
+  }
+
+  openConfirmationModal({
+    title: "Delete project?",
+    message:
+      "This will remove the project and all of its project-scoped definitions from this prototype.",
+    subject: project.code ? `${project.name} (${project.code})` : project.name,
+    onConfirm: () => {
+      deleteProject(projectId);
+    },
+  });
 };
 
 const showFieldError = (field, message) => {
@@ -650,8 +822,13 @@ const renderRulesOfCreditBody = (project) => {
   `;
 };
 
-const renderNewProjectBody = () => `
-  <form class="project-form" id="projectForm">
+const renderProjectEditorBody = () => {
+  const project = projectEditorProjectId ? findProjectById(projectEditorProjectId) : null;
+  const isEditing = Boolean(project);
+  const canDelete = projects.length > 1;
+
+  return `
+  <form class="project-form" id="projectForm" ${isEditing ? `data-project-id="${project.id}"` : ""}>
     <div class="form-row">
       <label class="field">
         <span>Project name</span>
@@ -661,6 +838,7 @@ const renderNewProjectBody = () => `
           placeholder="North River Upgrade"
           autocomplete="off"
           required
+          value="${escapeHtml(project?.name ?? "")}"
         />
       </label>
       <label class="field">
@@ -670,6 +848,7 @@ const renderNewProjectBody = () => `
           data-project-field="code"
           placeholder="NRU-01"
           autocomplete="off"
+          value="${escapeHtml(project?.code ?? "")}"
         />
       </label>
     </div>
@@ -677,14 +856,42 @@ const renderNewProjectBody = () => `
       <label class="field">
         <span>Status</span>
         <select data-project-field="status">
-          <option value="active">Active</option>
-          <option value="archived">Archived</option>
+          <option value="active" ${project?.archived ? "" : "selected"}>Active</option>
+          <option value="archived" ${project?.archived ? "selected" : ""}>Archived</option>
         </select>
       </label>
     </div>
-    <button class="primary-button" type="submit">Create project</button>
+    <div class="project-form-actions">
+      ${
+        isEditing
+          ? `
+            <div>
+              <button
+                class="definition-action definition-action-danger"
+                type="button"
+                data-action="delete-project"
+                ${canDelete ? "" : "disabled"}
+              >
+                Delete project
+              </button>
+              ${
+                canDelete
+                  ? ""
+                  : `
+                    <p class="project-form-delete-hint">
+                      Keep at least one project in the workspace.
+                    </p>
+                  `
+              }
+            </div>
+          `
+          : "<span></span>"
+      }
+      <button class="primary-button" type="submit">${isEditing ? "Save project" : "Create project"}</button>
+    </div>
   </form>
 `;
+};
 
 const viewMeta = {
   deliverables: {
@@ -723,11 +930,14 @@ const viewMeta = {
     copy: "Define the construction packages that deliverables can belong to within this project.",
     body: (project) => renderDefinitionBody("packages", project),
   },
-  "new-project": {
-    title: "New project",
-    copy: "Create a project record first, then define its phases, WBS items, packages, deliverable types, and rules of credit.",
+  "project-editor": {
+    title: () => (projectEditorProjectId ? "Edit project" : "New project"),
+    copy: () =>
+      projectEditorProjectId
+        ? "Update the selected project's name, code, or status. Deletion removes its project-scoped data."
+        : "Create a project record first, then define its phases, WBS items, packages, deliverable types, and rules of credit.",
     eyebrow: "Projects",
-    body: () => renderNewProjectBody(),
+    body: () => renderProjectEditorBody(),
   },
 };
 
@@ -815,14 +1025,58 @@ const validateRuleSetForm = (form, projectId, excludingId = null) => {
   };
 };
 
+const validateProjectValues = ({ name, code }, excludingId = null) => {
+  if (!name) {
+    return {
+      field: "name",
+      message: "Project name is required.",
+    };
+  }
+
+  if (
+    projects.some(
+      (project) =>
+        project.id !== excludingId && normalizeValue(project.name) === normalizeValue(name),
+    )
+  ) {
+    return {
+      field: "name",
+      message: "A project with this name already exists.",
+    };
+  }
+
+  if (
+    code &&
+    projects.some(
+      (project) =>
+        project.id !== excludingId && normalizeValue(project.code) === normalizeValue(code),
+    )
+  ) {
+    return {
+      field: "code",
+      message: "A project with this code already exists.",
+    };
+  }
+
+  return {
+    payload: {
+      name,
+      code,
+    },
+  };
+};
+
 const renderView = () => {
   const config = viewMeta[currentView];
-  const eyebrow = config.eyebrow ?? currentProject.name;
-  const copy = config.copy ?? "";
-  const body = config.body ? config.body(currentProject).trim() : "";
+  const eyebrow =
+    typeof config.eyebrow === "function" ? config.eyebrow(currentProject) : config.eyebrow;
+  const title = typeof config.title === "function" ? config.title(currentProject) : config.title;
+  const copy = typeof config.copy === "function" ? config.copy(currentProject) : config.copy ?? "";
+  const bodySource = typeof config.body === "function" ? config.body(currentProject) : config.body;
+  const body = bodySource ? bodySource.trim() : "";
 
-  workspaceEyebrow.textContent = eyebrow;
-  workspaceTitle.textContent = config.title;
+  workspaceEyebrow.textContent = eyebrow ?? currentProject.name;
+  workspaceTitle.textContent = title;
   workspaceCopy.textContent = copy;
   workspaceCopy.hidden = !copy;
   workspaceBody.innerHTML = body;
@@ -955,20 +1209,7 @@ const bindDefinitionView = (view) => {
 
   deleteButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      const itemId = button.dataset.itemId;
-
-      getProjectState(currentProject.id)[view] = getDefinitionItems(view, currentProject.id).filter(
-        (item) => item.id !== itemId,
-      );
-
-      if (editingDefinition.view === view && editingDefinition.itemId === itemId) {
-        editingDefinition = {
-          view: null,
-          itemId: null,
-        };
-      }
-
-      renderView();
+      requestDefinitionDeletion(view, button.dataset.itemId);
     });
   });
 
@@ -1105,17 +1346,7 @@ const bindRuleSetView = () => {
 
   deleteButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      const ruleSetId = button.dataset.ruleSetId;
-
-      getProjectState(currentProject.id).ruleSets = getRuleSets(currentProject.id).filter(
-        (item) => item.id !== ruleSetId,
-      );
-
-      if (editingRuleSetId === ruleSetId) {
-        editingRuleSetId = null;
-      }
-
-      renderView();
+      requestRuleSetDeletion(button.dataset.ruleSetId);
     });
   });
 
@@ -1147,8 +1378,9 @@ const buildProjectId = (name) => {
   return candidate;
 };
 
-const bindNewProjectView = () => {
+const bindProjectEditorView = () => {
   const form = document.getElementById("projectForm");
+  const deleteButton = workspaceBody.querySelector('[data-action="delete-project"]');
 
   if (!form) return;
 
@@ -1165,42 +1397,49 @@ const bindNewProjectView = () => {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
 
+    const editingProjectId = form.dataset.projectId ?? null;
     const nameInput = form.querySelector('[data-project-field="name"]');
     const codeInput = form.querySelector('[data-project-field="code"]');
     const statusInput = form.querySelector('[data-project-field="status"]');
     const name = nameInput?.value.trim() ?? "";
     const code = codeInput?.value.trim() ?? "";
     const archived = statusInput?.value === "archived";
+    const validation = validateProjectValues({ name, code }, editingProjectId);
 
-    if (!name) {
-      showFieldError(nameInput, "Project name is required.");
+    if (!("payload" in validation)) {
+      const field =
+        validation.field === "name"
+          ? nameInput
+          : validation.field === "code"
+            ? codeInput
+            : null;
+      showFieldError(field, validation.message);
       return;
     }
 
-    if (projects.some((project) => normalizeValue(project.name) === normalizeValue(name))) {
-      showFieldError(nameInput, "A project with this name already exists.");
-      return;
+    if (editingProjectId) {
+      const project = findProjectById(editingProjectId);
+
+      if (!project) {
+        return;
+      }
+
+      Object.assign(project, validation.payload, { archived });
+      currentProject = project;
+    } else {
+      const project = {
+        id: buildProjectId(name),
+        ...validation.payload,
+        archived,
+      };
+
+      projects = [...projects, project];
+      projectStateStore[project.id] = createProjectState();
+      currentProject = project;
     }
 
-    if (
-      code &&
-      projects.some((project) => normalizeValue(project.code) === normalizeValue(code))
-    ) {
-      showFieldError(codeInput, "A project with this code already exists.");
-      return;
-    }
-
-    const project = {
-      id: buildProjectId(name),
-      name,
-      code,
-      archived,
-    };
-
-    projects = [...projects, project];
-    projectStateStore[project.id] = createProjectState();
-    currentProject = project;
     currentView = "deliverables";
+    closeProjectEditor();
     resetDefinitionEditingState();
     renderProjectOptions();
     syncProjectSelection();
@@ -1208,6 +1447,15 @@ const bindNewProjectView = () => {
     renderView();
     closeProjectDropdown();
     closeSidebarOnMobile();
+  });
+
+  deleteButton?.addEventListener("click", () => {
+    const editingProjectId = form.dataset.projectId ?? null;
+    if (!editingProjectId) {
+      return;
+    }
+
+    requestProjectDeletion(editingProjectId);
   });
 
   focusFirstField('[data-project-field="name"]');
@@ -1224,8 +1472,8 @@ const bindViewInteractions = () => {
     return;
   }
 
-  if (currentView === "new-project") {
-    bindNewProjectView();
+  if (currentView === "project-editor") {
+    bindProjectEditorView();
   }
 };
 
@@ -1255,8 +1503,9 @@ projectOptionList.addEventListener("click", (event) => {
   currentProject =
     projects.find((project) => project.id === option.dataset.projectId) ?? currentProject;
   resetDefinitionEditingState();
+  closeProjectEditor();
 
-  if (currentView === "new-project") {
+  if (currentView === "project-editor") {
     currentView = "deliverables";
     setActiveMenu(currentView);
   }
@@ -1267,24 +1516,48 @@ projectOptionList.addEventListener("click", (event) => {
   closeSidebarOnMobile();
 });
 
+editProjectOption.addEventListener("click", () => {
+  openProjectEditor(currentProject.id);
+});
+
 addProjectOption.addEventListener("click", () => {
-  currentView = "new-project";
-  resetDefinitionEditingState();
-  setActiveMenu("");
-  renderView();
-  closeProjectDropdown();
-  closeSidebarOnMobile();
+  openProjectEditor();
 });
 
 menuItems.forEach((item) => {
   item.addEventListener("click", () => {
     currentView = item.dataset.view;
+    closeProjectEditor();
     resetDefinitionEditingState();
     setActiveMenu(currentView);
     renderView();
     closeProjectDropdown();
     closeSidebarOnMobile();
   });
+});
+
+confirmationDialogCancel.addEventListener("click", () => {
+  closeConfirmationModal();
+});
+
+confirmationDialogConfirm.addEventListener("click", () => {
+  const onConfirm = pendingConfirmationAction;
+
+  closeConfirmationModal({ restoreFocus: false });
+  onConfirm?.();
+});
+
+confirmationModal.addEventListener("click", (event) => {
+  if (event.target === confirmationModal) {
+    closeConfirmationModal();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && isConfirmationModalOpen()) {
+    event.preventDefault();
+    closeConfirmationModal();
+  }
 });
 
 document.addEventListener("click", (event) => {

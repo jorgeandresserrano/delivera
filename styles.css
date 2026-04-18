@@ -30,6 +30,10 @@ body {
   min-height: 100svh;
 }
 
+body.has-modal-open {
+  overflow: hidden;
+}
+
 button {
   border: 0;
   background: transparent;
@@ -220,6 +224,24 @@ button {
 
 .project-option-add strong {
   color: #fff5ea;
+}
+
+.project-option-manage strong {
+  color: #fff5ea;
+}
+
+.project-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.project-form-delete-hint {
+  margin: 0;
+  color: #9b4d41;
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .menu-item {
@@ -764,6 +786,77 @@ button {
   min-width: 0;
 }
 
+.confirmation-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(12, 14, 18, 0.48);
+  backdrop-filter: blur(6px);
+}
+
+.confirmation-modal[hidden] {
+  display: none;
+}
+
+.confirmation-dialog {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid rgba(29, 32, 37, 0.08);
+  border-radius: 18px;
+  background: rgba(251, 249, 244, 0.98);
+  box-shadow: 0 24px 80px rgba(18, 20, 25, 0.18);
+}
+
+.confirmation-dialog-eyebrow,
+.confirmation-dialog-subject-label {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.confirmation-dialog-title,
+.confirmation-dialog-message {
+  margin: 0;
+}
+
+.confirmation-dialog-title {
+  font-size: 1.4rem;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.confirmation-dialog-message {
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.confirmation-dialog-subject {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(244, 241, 234, 0.72);
+}
+
+.confirmation-dialog-subject strong {
+  font-size: 0.96rem;
+  font-weight: 650;
+}
+
+.confirmation-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 @media (max-width: 760px) {
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
@@ -854,5 +947,18 @@ button {
 
   .ruleset-rule-list-item {
     grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .confirmation-modal {
+    padding: 16px;
+  }
+
+  .confirmation-dialog-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .confirmation-dialog-actions .definition-action {
+    width: 100%;
   }
 }
