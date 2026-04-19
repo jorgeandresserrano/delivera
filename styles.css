@@ -806,7 +806,7 @@ button {
   gap: 10px;
 }
 
-.deliverables-stage-view-control {
+.deliverables-view-control {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -818,14 +818,14 @@ button {
   color: var(--text-muted);
 }
 
-.deliverables-stage-view-control span {
+.deliverables-view-control span {
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
-.deliverables-stage-view-control select {
+.deliverables-view-control select {
   min-width: 176px;
   min-height: 30px;
   padding: 0;
@@ -1418,7 +1418,7 @@ button {
   }
 
   .deliverables-table-actions,
-  .deliverables-stage-view-control {
+  .deliverables-view-control {
     width: 100%;
   }
 
@@ -1428,8 +1428,8 @@ button {
   }
 
   .deliverables-table-head .primary-button,
-  .deliverables-stage-view-control,
-  .deliverables-stage-view-control select,
+  .deliverables-view-control,
+  .deliverables-view-control select,
   .deliverable-form-actions .primary-button,
   .deliverable-form-actions .definition-action,
   .deliverable-modal-head .definition-action {

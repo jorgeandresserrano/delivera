@@ -240,14 +240,20 @@ const createDeliverableStageRecord = (stage, index) => ({
 const createDeliverableStagesFromRuleSet = (ruleSet) =>
   ruleSet?.stages?.map((stage, index) => createDeliverableStageRecord(stage, index)) ?? [];
 
-const createDeliverablesTableFilters = () => ({
+const createDeliverablesTableFilters = (project = null) => ({
   code: "",
   typeId: "",
   assignments: "",
   ruleSetId: "",
-  phaseId: "",
+  phaseId: getProjectDefaultPhaseId(project),
   wbsId: "",
   packageId: "",
+});
+
+const createDeliverablesTableState = (project = null) => ({
+  sortBy: "code",
+  sortDirection: "asc",
+  filters: createDeliverablesTableFilters(project),
 });
 
 let projects = [...projectOptionList.querySelectorAll("[data-project-id]")].map((option) =>
@@ -536,11 +542,7 @@ let pendingConfirmationAction = null;
 let confirmationReturnFocus = null;
 let deliverableModalReturnFocus = null;
 let isDesktopSidebarCollapsed = false;
-let deliverablesTableState = {
-  sortBy: "code",
-  sortDirection: "asc",
-  filters: createDeliverablesTableFilters(),
-};
+let deliverablesTableState = createDeliverablesTableState(currentProject);
 let editingDefinition = {
   view: null,
   itemId: null,
@@ -583,10 +585,11 @@ const findDefinitionItem = (view, projectId, itemId) =>
 const findRuleSet = (projectId, ruleSetId) =>
   getRuleSets(projectId).find((item) => item.id === ruleSetId);
 
-const getProjectDefaultPhaseId = (project) =>
-  project?.defaultPhaseId && findDefinitionItem("phases", project.id, project.defaultPhaseId)
+function getProjectDefaultPhaseId(project) {
+  return project?.defaultPhaseId && findDefinitionItem("phases", project.id, project.defaultPhaseId)
     ? project.defaultPhaseId
     : "";
+}
 
 const getDefinitionDisplayName = (view, projectId, itemId) => {
   const config = definitionConfigs[view];
@@ -684,12 +687,8 @@ const hasDuplicateRuleSet = (projectId, value, excludingId = null) =>
 
 const findProjectById = (projectId) => projects.find((project) => project.id === projectId) ?? null;
 
-const resetDeliverablesTableState = () => {
-  deliverablesTableState = {
-    sortBy: "code",
-    sortDirection: "asc",
-    filters: createDeliverablesTableFilters(),
-  };
+const resetDeliverablesTableState = (project = currentProject) => {
+  deliverablesTableState = createDeliverablesTableState(project);
 };
 
 const formatLabelList = (labels) => {
@@ -855,6 +854,10 @@ const deleteDefinitionItem = (view, itemId) => {
 
   if (view === "phases" && currentProject.defaultPhaseId === itemId) {
     currentProject.defaultPhaseId = "";
+  }
+
+  if (view === "phases" && deliverablesTableState.filters.phaseId === itemId) {
+    deliverablesTableState.filters.phaseId = getProjectDefaultPhaseId(currentProject);
   }
 
   if (view === "types" && editingDeliverableTypeId === itemId) {
@@ -1836,34 +1839,41 @@ const getActiveDeliverableStageRuleSet = (projectId) => {
   return ruleSetId ? findRuleSet(projectId, ruleSetId) ?? null : null;
 };
 
+const getActiveDeliverablePhaseId = () => deliverablesTableState.filters.phaseId || "";
+
+const shouldHideDeliverableColumn = (columnKey, projectId) =>
+  (columnKey === "phaseId" && Boolean(getActiveDeliverablePhaseId())) ||
+  (columnKey === "ruleSetId" && Boolean(getActiveDeliverableStageRuleSet(projectId)));
+
 const getDeliverableColumns = (projectId) => {
   const activeRuleSet = getActiveDeliverableStageRuleSet(projectId);
+  const dynamicStageColumns = activeRuleSet
+    ? activeRuleSet.stages.map((stage, index) => ({
+        key: `stage-${stage.id ?? index}`,
+        label: stage.name,
+        getDisplayValue: (deliverable) =>
+          getDeliverableStageDisplayValue(deliverable, projectId, index),
+        getSortValue: (deliverable) => {
+          const stageEntry = getDeliverableStageEntry(deliverable, projectId, index);
+          return stageEntry
+            ? `${stageEntry.order ?? index}-${getStageStatusLabel(stageEntry.status)}-${formatStageDate(stageEntry.expectedDate)}-${formatStageDate(stageEntry.completedDate)}`
+            : "";
+        },
+        renderCell: (deliverable) => renderDeliverableStageCell(deliverable, projectId, index),
+        cellClassName: "deliverables-cell-stage",
+      }))
+    : [];
 
-  if (!activeRuleSet) {
-    return baseDeliverableColumns;
-  }
+  return baseDeliverableColumns.flatMap((column) => {
+    if (column.key === "ruleSetId") {
+      return [
+        ...(shouldHideDeliverableColumn(column.key, projectId) ? [] : [column]),
+        ...dynamicStageColumns,
+      ];
+    }
 
-  const dynamicStageColumns = activeRuleSet.stages.map((stage, index) => ({
-    key: `stage-${stage.id ?? index}`,
-    label: stage.name,
-    getDisplayValue: (deliverable) => getDeliverableStageDisplayValue(deliverable, projectId, index),
-    getSortValue: (deliverable) => {
-      const stageEntry = getDeliverableStageEntry(deliverable, projectId, index);
-      return stageEntry
-        ? `${stageEntry.order ?? index}-${getStageStatusLabel(stageEntry.status)}-${formatStageDate(stageEntry.expectedDate)}-${formatStageDate(stageEntry.completedDate)}`
-        : "";
-    },
-    renderCell: (deliverable) => renderDeliverableStageCell(deliverable, projectId, index),
-    cellClassName: "deliverables-cell-stage",
-  }));
-
-  const ruleSetColumnIndex = baseDeliverableColumns.findIndex((column) => column.key === "ruleSetId");
-
-  return [
-    ...baseDeliverableColumns.slice(0, ruleSetColumnIndex + 1),
-    ...dynamicStageColumns,
-    ...baseDeliverableColumns.slice(ruleSetColumnIndex + 1),
-  ];
+    return shouldHideDeliverableColumn(column.key, projectId) ? [] : [column];
+  });
 };
 
 const getMissingDeliverableRequirements = (projectId) => {
@@ -2049,18 +2059,38 @@ const renderDeliverableHeaderCell = (column, projectId) => {
   `;
 };
 
-const renderDeliverableStageViewControl = (projectId) => `
-  <label class="deliverables-stage-view-control">
-    <span>View stages</span>
-    <select data-action="deliverable-stage-view">
-      ${renderSelectOptions(
-        getRuleSetOptions(projectId),
-        deliverablesTableState.filters.ruleSetId,
-        "All lifecycle sets",
-      )}
+const renderDeliverableTableViewControl = ({
+  label,
+  action,
+  options,
+  value,
+  placeholderLabel,
+}) => `
+  <label class="deliverables-view-control">
+    <span>${escapeHtml(label)}</span>
+    <select data-action="${escapeHtml(action)}">
+      ${renderSelectOptions(options, value, placeholderLabel)}
     </select>
   </label>
 `;
+
+const renderDeliverableStageViewControl = (projectId) =>
+  renderDeliverableTableViewControl({
+    label: "View stages",
+    action: "deliverable-stage-view",
+    options: getRuleSetOptions(projectId),
+    value: deliverablesTableState.filters.ruleSetId,
+    placeholderLabel: "All lifecycle sets",
+  });
+
+const renderDeliverablePhaseViewControl = (projectId) =>
+  renderDeliverableTableViewControl({
+    label: "View phase",
+    action: "deliverable-phase-view",
+    options: getDefinitionOptions("phases", projectId),
+    value: deliverablesTableState.filters.phaseId,
+    placeholderLabel: "All phases",
+  });
 
 const renderDeliverableSelectField = ({
   key,
@@ -2280,10 +2310,11 @@ const renderDeliverableModalContent = (project) => `
 const getFilteredSortedDeliverables = (projectId) => {
   const allDeliverables = [...getDeliverables(projectId)];
   const columns = getDeliverableColumns(projectId);
+  const filterColumns = baseDeliverableColumns;
   const { filters, sortBy, sortDirection } = deliverablesTableState;
 
   const filteredDeliverables = allDeliverables.filter((deliverable) =>
-    columns.every((column) => {
+    filterColumns.every((column) => {
       const filterValue = filters[column.key];
 
       if (!filterValue) {
@@ -2337,6 +2368,7 @@ const renderDeliverablesTableSection = (project) => {
       </div>
       <div class="deliverables-table-actions">
         ${renderDeliverableStageViewControl(project.id)}
+        ${renderDeliverablePhaseViewControl(project.id)}
         <button
           class="primary-button"
           type="button"
@@ -3449,6 +3481,7 @@ const bindDeliverablesTableControls = () => {
   const sortButtons = workspaceBody.querySelectorAll('[data-action="sort-deliverables"]');
   const filterControls = workspaceBody.querySelectorAll("[data-deliverable-filter]");
   const stageViewControl = workspaceBody.querySelector('[data-action="deliverable-stage-view"]');
+  const phaseViewControl = workspaceBody.querySelector('[data-action="deliverable-phase-view"]');
 
   sortButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -3491,6 +3524,13 @@ const bindDeliverablesTableControls = () => {
     deliverablesTableState.filters.ruleSetId = stageViewControl.value;
     updateDeliverablesTableSection({
       focusSelector: '[data-action="deliverable-stage-view"]',
+    });
+  });
+
+  phaseViewControl?.addEventListener("change", () => {
+    deliverablesTableState.filters.phaseId = phaseViewControl.value;
+    updateDeliverablesTableSection({
+      focusSelector: '[data-action="deliverable-phase-view"]',
     });
   });
 };
@@ -3705,9 +3745,9 @@ const bindProjectEditorView = () => {
       projects = [...projects, project];
       projectStateStore[project.id] = createProjectState();
       currentProject = project;
-      resetDeliverablesTableState();
     }
 
+    resetDeliverablesTableState();
     currentView = "deliverables";
     closeProjectEditor();
     resetDefinitionEditingState();
