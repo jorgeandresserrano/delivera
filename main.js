@@ -226,9 +226,23 @@ const createEmptyTypeAllocation = () => ({
   roleId: "",
 });
 
+const createDeliverableStageRecord = (stage, index) => ({
+  id: crypto.randomUUID(),
+  templateStageId: stage.id ?? null,
+  stageName: stage.name,
+  order: index,
+  status: index === 0 ? "active" : "pending",
+  expectedDate: null,
+  completedDate: null,
+});
+
+const createDeliverableStagesFromRuleSet = (ruleSet) =>
+  ruleSet?.stages?.map((stage, index) => createDeliverableStageRecord(stage, index)) ?? [];
+
 const createDeliverablesTableFilters = () => ({
   code: "",
   typeId: "",
+  assignments: "",
   ruleSetId: "",
   phaseId: "",
   wbsId: "",
@@ -618,6 +632,14 @@ const getDeliverableTypesUsingRole = (projectId, roleId) =>
   getDefinitionItems("types", projectId).filter((deliverableType) =>
     (deliverableType.allocations ?? []).some((allocation) => allocation.roleId === roleId),
   );
+
+const getDeliverableStages = (deliverable, projectId) => {
+  if (!Array.isArray(deliverable.stages)) {
+    deliverable.stages = createDeliverableStagesFromRuleSet(findRuleSet(projectId, deliverable.ruleSetId));
+  }
+
+  return deliverable.stages;
+};
 
 const getDeliverableTypeAssignmentTemplates = (projectId, typeId) => {
   const deliverableType = findDefinitionItem("types", projectId, typeId);
@@ -1589,6 +1611,56 @@ const renderRuleSetCard = (ruleSet) => {
   `;
 };
 
+const getDeliverableAssignmentEntries = (deliverable, projectId) =>
+  (deliverable.assignments ?? [])
+    .map((assignment, index) => {
+      const roleName = assignment.roleName ?? getRoleDisplayName(projectId, assignment.roleId);
+      const memberName =
+        findMember(projectId, assignment.memberId)?.name ?? assignment.memberName ?? "Unassigned";
+
+      return {
+        order: assignment.order ?? index,
+        roleName,
+        memberName,
+      };
+    })
+    .sort((left, right) => left.order - right.order);
+
+const getDeliverableAssignmentsDisplayValue = (deliverable, projectId) => {
+  const entries = getDeliverableAssignmentEntries(deliverable, projectId);
+
+  if (!entries.length) {
+    return "—";
+  }
+
+  return entries
+    .map((entry) => `${entry.roleName}: ${entry.memberName}`)
+    .join(" · ");
+};
+
+const renderDeliverableAssignmentsCell = (deliverable, projectId) => {
+  const entries = getDeliverableAssignmentEntries(deliverable, projectId);
+
+  if (!entries.length) {
+    return `<span class="deliverables-cell-empty">—</span>`;
+  }
+
+  return `
+    <div class="deliverables-assignment-list">
+      ${entries
+        .map(
+          (entry) => `
+            <div class="deliverables-assignment-item">
+              <span class="deliverables-assignment-role">${escapeHtml(entry.roleName)}</span>
+              <strong class="deliverables-assignment-member">${escapeHtml(entry.memberName)}</strong>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+};
+
 const renderRulesOfCreditBody = (project) => {
   const ruleSets = getRuleSets(project.id);
   const listMarkup = ruleSets.length
@@ -1620,7 +1692,65 @@ const renderRulesOfCreditBody = (project) => {
   `;
 };
 
-const deliverableColumns = [
+const getStageStatusLabel = (status = "pending") => {
+  const labels = {
+    active: "Active",
+    pending: "Pending",
+    completed: "Done",
+    blocked: "Blocked",
+    skipped: "Skipped",
+  };
+
+  return labels[status] ?? "Pending";
+};
+
+const getStageStatusTone = (status = "pending") => {
+  const tones = {
+    active: "active",
+    pending: "pending",
+    completed: "completed",
+    blocked: "blocked",
+    skipped: "skipped",
+  };
+
+  return tones[status] ?? "pending";
+};
+
+const formatStageDate = (value) => (value ? value : "—");
+
+const getDeliverableStageEntry = (deliverable, projectId, order) =>
+  getDeliverableStages(deliverable, projectId).find((stage) => (stage.order ?? 0) === order) ?? null;
+
+const getDeliverableStageDisplayValue = (deliverable, projectId, order) => {
+  const stage = getDeliverableStageEntry(deliverable, projectId, order);
+
+  if (!stage) {
+    return "—";
+  }
+
+  return `${getStageStatusLabel(stage.status)} · Exp ${formatStageDate(stage.expectedDate)} · Act ${formatStageDate(stage.completedDate)}`;
+};
+
+const renderDeliverableStageCell = (deliverable, projectId, order) => {
+  const stage = getDeliverableStageEntry(deliverable, projectId, order);
+
+  if (!stage) {
+    return `<span class="deliverables-cell-empty">—</span>`;
+  }
+
+  return `
+    <div class="deliverables-stage-cell">
+      <span class="deliverables-stage-status is-${escapeHtml(getStageStatusTone(stage.status))}">
+        ${escapeHtml(getStageStatusLabel(stage.status))}
+      </span>
+      <span class="deliverables-stage-meta">
+        Exp ${escapeHtml(formatStageDate(stage.expectedDate))} · Act ${escapeHtml(formatStageDate(stage.completedDate))}
+      </span>
+    </div>
+  `;
+};
+
+const baseDeliverableColumns = [
   {
     key: "code",
     label: "Code",
@@ -1634,6 +1764,15 @@ const deliverableColumns = [
     getDisplayValue: (deliverable, projectId) =>
       getDefinitionDisplayName("types", projectId, deliverable.typeId),
     getFilterOptions: (projectId) => getDefinitionOptions("types", projectId),
+  },
+  {
+    key: "assignments",
+    label: "Team",
+    filterKind: "text",
+    getDisplayValue: (deliverable, projectId) =>
+      getDeliverableAssignmentsDisplayValue(deliverable, projectId),
+    renderCell: (deliverable, projectId) => renderDeliverableAssignmentsCell(deliverable, projectId),
+    cellClassName: "deliverables-cell-team",
   },
   {
     key: "ruleSetId",
@@ -1680,6 +1819,41 @@ const deliverableColumns = [
     ],
   },
 ];
+
+const getActiveDeliverableStageRuleSet = (projectId) => {
+  const ruleSetId = deliverablesTableState.filters.ruleSetId;
+  return ruleSetId ? findRuleSet(projectId, ruleSetId) ?? null : null;
+};
+
+const getDeliverableColumns = (projectId) => {
+  const activeRuleSet = getActiveDeliverableStageRuleSet(projectId);
+
+  if (!activeRuleSet) {
+    return baseDeliverableColumns;
+  }
+
+  const dynamicStageColumns = activeRuleSet.stages.map((stage, index) => ({
+    key: `stage-${stage.id ?? index}`,
+    label: stage.name,
+    getDisplayValue: (deliverable) => getDeliverableStageDisplayValue(deliverable, projectId, index),
+    getSortValue: (deliverable) => {
+      const stageEntry = getDeliverableStageEntry(deliverable, projectId, index);
+      return stageEntry
+        ? `${stageEntry.order ?? index}-${getStageStatusLabel(stageEntry.status)}-${formatStageDate(stageEntry.expectedDate)}-${formatStageDate(stageEntry.completedDate)}`
+        : "";
+    },
+    renderCell: (deliverable) => renderDeliverableStageCell(deliverable, projectId, index),
+    cellClassName: "deliverables-cell-stage",
+  }));
+
+  const ruleSetColumnIndex = baseDeliverableColumns.findIndex((column) => column.key === "ruleSetId");
+
+  return [
+    ...baseDeliverableColumns.slice(0, ruleSetColumnIndex + 1),
+    ...dynamicStageColumns,
+    ...baseDeliverableColumns.slice(ruleSetColumnIndex + 1),
+  ];
+};
 
 const getMissingDeliverableRequirements = (projectId) => {
   const requirements = [
@@ -1754,6 +1928,11 @@ const getDeliverableColumnDisplayValue = (column, deliverable, projectId) =>
 const getDeliverableColumnSortValue = (column, deliverable, projectId) =>
   (column.getSortValue ?? column.getDisplayValue)(deliverable, projectId);
 
+const renderDeliverableCellContent = (column, deliverable, projectId) =>
+  column.renderCell
+    ? column.renderCell(deliverable, projectId)
+    : escapeHtml(getDeliverableColumnDisplayValue(column, deliverable, projectId));
+
 const compareDeliverableValues = (leftValue, rightValue) => {
   const left = String(leftValue ?? "").trim();
   const right = String(rightValue ?? "").trim();
@@ -1798,6 +1977,10 @@ const renderSelectOptions = (options, selectedValue = "", placeholderLabel = nul
 `;
 
 const renderDeliverableFilterControl = (column, projectId) => {
+  if (!column.filterKind) {
+    return "";
+  }
+
   const filterLabel = `Filter ${column.label.toLowerCase()}`;
 
   if (column.filterKind === "text") {
@@ -1854,6 +2037,19 @@ const renderDeliverableHeaderCell = (column, projectId) => {
     </th>
   `;
 };
+
+const renderDeliverableStageViewControl = (projectId) => `
+  <label class="deliverables-stage-view-control">
+    <span>View stages</span>
+    <select data-action="deliverable-stage-view">
+      ${renderSelectOptions(
+        getRuleSetOptions(projectId),
+        deliverablesTableState.filters.ruleSetId,
+        "All lifecycle sets",
+      )}
+    </select>
+  </label>
+`;
 
 const renderDeliverableSelectField = ({
   key,
@@ -2071,10 +2267,11 @@ const renderDeliverableModalContent = (project) => `
 
 const getFilteredSortedDeliverables = (projectId) => {
   const allDeliverables = [...getDeliverables(projectId)];
+  const columns = getDeliverableColumns(projectId);
   const { filters, sortBy, sortDirection } = deliverablesTableState;
 
   const filteredDeliverables = allDeliverables.filter((deliverable) =>
-    deliverableColumns.every((column) => {
+    columns.every((column) => {
       const filterValue = filters[column.key];
 
       if (!filterValue) {
@@ -2096,7 +2293,7 @@ const getFilteredSortedDeliverables = (projectId) => {
   );
 
   const activeSortColumn =
-    deliverableColumns.find((column) => column.key === sortBy) ?? deliverableColumns[0];
+    columns.find((column) => column.key === sortBy) ?? columns[0];
 
   return filteredDeliverables.sort((leftDeliverable, rightDeliverable) => {
     const comparison = compareDeliverableValues(
@@ -2115,7 +2312,10 @@ const getFilteredSortedDeliverables = (projectId) => {
 const renderDeliverablesTableSection = (project) => {
   const allDeliverables = getDeliverables(project.id);
   const filteredDeliverables = getFilteredSortedDeliverables(project.id);
+  const columns = getDeliverableColumns(project.id);
   const hasFilters = Object.values(deliverablesTableState.filters).some(Boolean);
+  const selectedRuleSet = getActiveDeliverableStageRuleSet(project.id);
+  const tableMinWidth = 1340 + (selectedRuleSet?.stages.length ?? 0) * 170;
 
   return `
     <div class="deliverables-table-head">
@@ -2123,19 +2323,22 @@ const renderDeliverablesTableSection = (project) => {
         <p class="definition-list-title">Deliverables</p>
         <span class="definition-list-count">${allDeliverables.length}</span>
       </div>
-      <button
-        class="primary-button"
-        type="button"
-        data-action="open-deliverable-modal"
-      >
-        Create deliverable
-      </button>
+      <div class="deliverables-table-actions">
+        ${renderDeliverableStageViewControl(project.id)}
+        <button
+          class="primary-button"
+          type="button"
+          data-action="open-deliverable-modal"
+        >
+          Create deliverable
+        </button>
+      </div>
     </div>
     <div class="deliverables-table-wrap">
-      <table class="deliverables-table">
+      <table class="deliverables-table" style="min-width: ${tableMinWidth}px">
         <thead>
           <tr>
-            ${deliverableColumns.map((column) => renderDeliverableHeaderCell(column, project.id)).join("")}
+            ${columns.map((column) => renderDeliverableHeaderCell(column, project.id)).join("")}
           </tr>
         </thead>
         <tbody>
@@ -2145,10 +2348,12 @@ const renderDeliverablesTableSection = (project) => {
                   .map(
                     (deliverable) => `
                       <tr>
-                        ${deliverableColumns
+                        ${columns
                           .map(
                             (column) => `
-                              <td>${escapeHtml(getDeliverableColumnDisplayValue(column, deliverable, project.id))}</td>
+                              <td class="${escapeHtml(column.cellClassName ?? "")}">
+                                ${renderDeliverableCellContent(column, deliverable, project.id)}
+                              </td>
                             `,
                           )
                           .join("")}
@@ -2158,7 +2363,7 @@ const renderDeliverablesTableSection = (project) => {
                   .join("")
               : `
                   <tr>
-                    <td class="deliverables-empty-cell" colspan="${deliverableColumns.length}">
+                    <td class="deliverables-empty-cell" colspan="${columns.length}">
                       ${
                         hasFilters
                           ? "No deliverables match the current filters."
@@ -3138,13 +3343,11 @@ const validateDeliverableForm = (form, projectId) => {
       };
     }
 
-    // Snapshot the chosen assignment so later definition edits do not rewrite existing deliverables.
     assignments.push({
       id: crypto.randomUUID(),
       roleId: role.id,
       roleName: role.name,
       memberId: member.id,
-      memberName: member.name,
       order: index,
     });
   }
@@ -3154,6 +3357,7 @@ const validateDeliverableForm = (form, projectId) => {
       code: values.code,
       typeId: values.typeId,
       ruleSetId: values.ruleSetId,
+      stages: createDeliverableStagesFromRuleSet(findRuleSet(projectId, values.ruleSetId)),
       phaseId: values.phaseId,
       wbsId: values.wbsId,
       packageId: values.packageId || null,
@@ -3198,6 +3402,7 @@ const syncDeliverableAssignmentSection = (
 const bindDeliverablesTableControls = () => {
   const sortButtons = workspaceBody.querySelectorAll('[data-action="sort-deliverables"]');
   const filterControls = workspaceBody.querySelectorAll("[data-deliverable-filter]");
+  const stageViewControl = workspaceBody.querySelector('[data-action="deliverable-stage-view"]');
 
   sortButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -3235,9 +3440,16 @@ const bindDeliverablesTableControls = () => {
       });
     });
   });
+
+  stageViewControl?.addEventListener("change", () => {
+    deliverablesTableState.filters.ruleSetId = stageViewControl.value;
+    updateDeliverablesTableSection({
+      focusSelector: '[data-action="deliverable-stage-view"]',
+    });
+  });
 };
 
-const updateDeliverablesTableSection = ({ focusFilterKey = null } = {}) => {
+const updateDeliverablesTableSection = ({ focusFilterKey = null, focusSelector = null } = {}) => {
   const tableSection = document.getElementById("deliverablesTableSection");
 
   if (!tableSection) {
@@ -3255,6 +3467,11 @@ const updateDeliverablesTableSection = ({ focusFilterKey = null } = {}) => {
 
   tableSection.innerHTML = renderDeliverablesTableSection(currentProject);
   bindDeliverablesView();
+
+  if (focusSelector) {
+    tableSection.querySelector(focusSelector)?.focus();
+    return;
+  }
 
   if (!resolvedFocusFilterKey) {
     return;

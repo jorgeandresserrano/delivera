@@ -797,6 +797,43 @@ button {
   gap: 12px;
 }
 
+.deliverables-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.deliverables-stage-view-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(244, 241, 234, 0.72);
+  color: var(--text-muted);
+}
+
+.deliverables-stage-view-control span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.deliverables-stage-view-control select {
+  min-width: 176px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
 .deliverable-form-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -853,7 +890,7 @@ button {
 
 .deliverables-table {
   width: 100%;
-  min-width: 1120px;
+  min-width: 1340px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -932,6 +969,97 @@ button {
   color: var(--text-muted);
   text-align: center;
  }
+
+.deliverables-cell-team {
+  min-width: 220px;
+  vertical-align: top;
+}
+
+.deliverables-cell-stage {
+  min-width: 168px;
+  vertical-align: top;
+}
+
+.deliverables-cell-empty {
+  color: var(--text-muted);
+}
+
+.deliverables-stage-cell {
+  display: grid;
+  gap: 6px;
+}
+
+.deliverables-stage-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  width: fit-content;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.deliverables-stage-status.is-active {
+  background: rgba(156, 83, 40, 0.16);
+  color: #8b461d;
+}
+
+.deliverables-stage-status.is-pending {
+  background: rgba(29, 32, 37, 0.08);
+  color: var(--text-muted);
+}
+
+.deliverables-stage-status.is-completed {
+  background: rgba(47, 128, 87, 0.16);
+  color: #2d7650;
+}
+
+.deliverables-stage-status.is-blocked {
+  background: rgba(155, 77, 65, 0.16);
+  color: #8b372a;
+}
+
+.deliverables-stage-status.is-skipped {
+  background: rgba(93, 103, 112, 0.16);
+  color: #58626a;
+}
+
+.deliverables-stage-meta {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.deliverables-assignment-list {
+  display: grid;
+  gap: 6px;
+}
+
+.deliverables-assignment-item {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(29, 32, 37, 0.08);
+  border-radius: 10px;
+  background: rgba(244, 241, 234, 0.48);
+}
+
+.deliverables-assignment-role {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.deliverables-assignment-member {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
 
 .form-row {
   display: grid;
@@ -1288,7 +1416,19 @@ button {
     flex-direction: column;
   }
 
+  .deliverables-table-actions,
+  .deliverables-stage-view-control {
+    width: 100%;
+  }
+
+  .deliverables-table-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .deliverables-table-head .primary-button,
+  .deliverables-stage-view-control,
+  .deliverables-stage-view-control select,
   .deliverable-form-actions .primary-button,
   .deliverable-form-actions .definition-action,
   .deliverable-modal-head .definition-action {
