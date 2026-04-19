@@ -46,6 +46,7 @@ const createProjectFromOption = (option) => ({
   id: option.dataset.projectId,
   name: option.dataset.projectName,
   code: option.dataset.projectCode ?? "",
+  defaultPhaseId: option.dataset.projectDefaultPhaseId ?? "",
   archived: option.dataset.projectArchived === "true",
 });
 
@@ -582,6 +583,11 @@ const findDefinitionItem = (view, projectId, itemId) =>
 const findRuleSet = (projectId, ruleSetId) =>
   getRuleSets(projectId).find((item) => item.id === ruleSetId);
 
+const getProjectDefaultPhaseId = (project) =>
+  project?.defaultPhaseId && findDefinitionItem("phases", project.id, project.defaultPhaseId)
+    ? project.defaultPhaseId
+    : "";
+
 const getDefinitionDisplayName = (view, projectId, itemId) => {
   const config = definitionConfigs[view];
   const item = findDefinitionItem(view, projectId, itemId);
@@ -847,6 +853,10 @@ const deleteDefinitionItem = (view, itemId) => {
     (item) => item.id !== itemId,
   );
 
+  if (view === "phases" && currentProject.defaultPhaseId === itemId) {
+    currentProject.defaultPhaseId = "";
+  }
+
   if (view === "types" && editingDeliverableTypeId === itemId) {
     editingDeliverableTypeId = null;
   }
@@ -1043,6 +1053,7 @@ const renderProjectOptions = () => {
           data-project-id="${escapeHtml(project.id)}"
           data-project-name="${escapeHtml(project.name)}"
           data-project-code="${escapeHtml(project.code)}"
+          data-project-default-phase-id="${escapeHtml(project.defaultPhaseId ?? "")}"
           data-project-archived="${project.archived ? "true" : "false"}"
         >
           <strong>${escapeHtml(project.name)}</strong>
@@ -2197,6 +2208,7 @@ const renderDeliverableForm = (project) => `
         key: "phaseId",
         label: "Phase",
         options: getDefinitionOptions("phases", project.id),
+        value: getProjectDefaultPhaseId(project),
         placeholderLabel: getDefinitionItems("phases", project.id).length
           ? "Select a phase"
           : "Add a phase first",
@@ -2405,6 +2417,13 @@ const renderProjectEditorBody = () => {
   const project = projectEditorProjectId ? findProjectById(projectEditorProjectId) : null;
   const isEditing = Boolean(project);
   const canDelete = projects.length > 1;
+  const phaseOptions = project ? getDefinitionOptions("phases", project.id) : [];
+  const defaultPhaseId = getProjectDefaultPhaseId(project);
+  const defaultPhasePlaceholder = project
+    ? phaseOptions.length
+      ? "No default phase"
+      : "Add a phase first"
+    : "Create the project first";
 
   return `
   <form class="project-form" id="projectForm" ${isEditing ? `data-project-id="${project.id}"` : ""}>
@@ -2437,6 +2456,15 @@ const renderProjectEditorBody = () => {
         <select data-project-field="status">
           <option value="active" ${project?.archived ? "" : "selected"}>Active</option>
           <option value="archived" ${project?.archived ? "selected" : ""}>Archived</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Default phase</span>
+        <select
+          data-project-field="defaultPhaseId"
+          ${phaseOptions.length ? "" : "disabled"}
+        >
+          ${renderSelectOptions(phaseOptions, defaultPhaseId, defaultPhasePlaceholder)}
         </select>
       </label>
     </div>
@@ -2509,8 +2537,8 @@ const viewMeta = {
     title: () => (projectEditorProjectId ? "Edit project" : "New project"),
     copy: () =>
       projectEditorProjectId
-        ? "Update the selected project's name, code, or status. Deletion removes its project-scoped definitions and deliverables."
-        : "Create a project record first, then define its phases, WBS items, packages, roles, members, deliverable types, and lifecycle stages.",
+        ? "Update the selected project's name, code, status, or default phase. Deletion removes its project-scoped definitions and deliverables."
+        : "Create a project record first, then define its phases, WBS items, packages, roles, members, deliverable types, and lifecycle stages. Set the default phase once phases exist.",
     eyebrow: "Projects",
     body: () => renderProjectEditorBody(),
   },
@@ -2685,7 +2713,17 @@ const validateRuleSetForm = (form, projectId, excludingId = null) => {
   };
 };
 
-const validateProjectValues = ({ name, code }, excludingId = null) => {
+const collectProjectFormData = (form) => ({
+  name: form.querySelector('[data-project-field="name"]')?.value.trim() ?? "",
+  code: form.querySelector('[data-project-field="code"]')?.value.trim() ?? "",
+  status: form.querySelector('[data-project-field="status"]')?.value ?? "active",
+  defaultPhaseId: form.querySelector('[data-project-field="defaultPhaseId"]')?.value.trim() ?? "",
+});
+
+const validateProjectValues = (
+  { name, code, defaultPhaseId },
+  { projectId = null, excludingId = null } = {},
+) => {
   if (!name) {
     return {
       field: "name",
@@ -2718,10 +2756,18 @@ const validateProjectValues = ({ name, code }, excludingId = null) => {
     };
   }
 
+  if (defaultPhaseId && (!projectId || !findDefinitionItem("phases", projectId, defaultPhaseId))) {
+    return {
+      field: "defaultPhaseId",
+      message: "Choose a valid default phase.",
+    };
+  }
+
   return {
     payload: {
       name,
       code,
+      defaultPhaseId,
     },
   };
 };
@@ -3619,11 +3665,13 @@ const bindProjectEditorView = () => {
     const editingProjectId = form.dataset.projectId ?? null;
     const nameInput = form.querySelector('[data-project-field="name"]');
     const codeInput = form.querySelector('[data-project-field="code"]');
-    const statusInput = form.querySelector('[data-project-field="status"]');
-    const name = nameInput?.value.trim() ?? "";
-    const code = codeInput?.value.trim() ?? "";
-    const archived = statusInput?.value === "archived";
-    const validation = validateProjectValues({ name, code }, editingProjectId);
+    const defaultPhaseInput = form.querySelector('[data-project-field="defaultPhaseId"]');
+    const values = collectProjectFormData(form);
+    const archived = values.status === "archived";
+    const validation = validateProjectValues(values, {
+      projectId: editingProjectId,
+      excludingId: editingProjectId,
+    });
 
     if (!("payload" in validation)) {
       const field =
@@ -3631,6 +3679,8 @@ const bindProjectEditorView = () => {
           ? nameInput
           : validation.field === "code"
             ? codeInput
+            : validation.field === "defaultPhaseId"
+              ? defaultPhaseInput
             : null;
       showFieldError(field, validation.message);
       return;
@@ -3647,7 +3697,7 @@ const bindProjectEditorView = () => {
       currentProject = project;
     } else {
       const project = {
-        id: buildProjectId(name),
+        id: buildProjectId(values.name),
         ...validation.payload,
         archived,
       };
