@@ -1,0 +1,13 @@
+{
+  "hosting": {
+    "site": "engdelivera",
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      "app_specification.md",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}
