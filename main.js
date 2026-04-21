@@ -85,6 +85,7 @@ const createSeedTypeAllocation = (roleId) => ({
 
 const DEMO_PROJECT_DEFINITION_SEEDS = Object.freeze({
   "north-river": {
+    deliverableCount: 100,
     roles: ["Project engineer", "Lead designer", "Checker", "Document controller"],
     members: ["Jamie Chen", "Avery Patel", "Morgan Lee"],
     phases: ["Feasibility", "Detailed engineering", "Construction support"],
@@ -114,6 +115,7 @@ const DEMO_PROJECT_DEFINITION_SEEDS = Object.freeze({
     ],
   },
   "west-annex": {
+    deliverableCount: 50,
     roles: ["Project manager", "Structural engineer", "Reviewer", "BIM coordinator"],
     members: ["Nora Kim", "Diego Alvarez", "Priya Shah"],
     phases: ["Existing conditions", "Retrofit design", "Tender support"],
@@ -143,6 +145,7 @@ const DEMO_PROJECT_DEFINITION_SEEDS = Object.freeze({
     ],
   },
   "ore-handling": {
+    deliverableCount: 50,
     roles: ["Discipline lead", "Mechanical designer", "Approver", "Planner"],
     members: ["Ethan Brooks", "Mila Novak", "Zoe Campbell"],
     phases: ["Concept select", "60% design", "Issued for construction"],
@@ -173,7 +176,8 @@ const DEMO_PROJECT_DEFINITION_SEEDS = Object.freeze({
   },
 });
 
-const createSeededProjectState = (projectId) => {
+const createSeededProjectState = (project) => {
+  const projectId = project.id;
   const definitionSeed = DEMO_PROJECT_DEFINITION_SEEDS[projectId];
 
   if (!definitionSeed) {
@@ -205,6 +209,12 @@ const createSeededProjectState = (projectId) => {
       ),
     }),
   );
+  projectState.deliverables = createSeedDeliverables({
+    projectId,
+    projectCode: project.code,
+    deliverableCount: definitionSeed.deliverableCount ?? 0,
+    projectState,
+  });
 
   return projectState;
 };
@@ -240,6 +250,198 @@ const createDeliverableStageRecord = (stage, index) => ({
 const createDeliverableStagesFromRuleSet = (ruleSet) =>
   ruleSet?.stages?.map((stage, index) => createDeliverableStageRecord(stage, index)) ?? [];
 
+const DEMO_DELIVERABLE_DATE_ANCHOR = new Date(Date.UTC(2026, 0, 6));
+
+const formatDatePart = (value) => String(value).padStart(2, "0");
+
+const formatSeedDate = (date) =>
+  `${date.getUTCFullYear()}-${formatDatePart(date.getUTCMonth() + 1)}-${formatDatePart(date.getUTCDate())}`;
+
+const getSeedDateOffset = (days) => {
+  const nextDate = new Date(DEMO_DELIVERABLE_DATE_ANCHOR);
+  nextDate.setUTCDate(nextDate.getUTCDate() + days);
+  return formatSeedDate(nextDate);
+};
+
+const getDeliverableTypeCode = (typeName = "") => {
+  const tokens = typeName.match(/[A-Za-z0-9]+/g) ?? [];
+  const initials = tokens.map((token) => token[0]).join("").toUpperCase();
+
+  if (initials.length >= 2) {
+    return initials.slice(0, 3);
+  }
+
+  return tokens.join("").slice(0, 3).toUpperCase() || "DLV";
+};
+
+const createSeedDeliverableAssignments = (deliverableType, members, roleById, deliverableIndex) =>
+  (deliverableType.allocations ?? [])
+    .map((allocation, index) => {
+      const role = roleById.get(allocation.roleId);
+      const member = members[(deliverableIndex + index) % members.length];
+
+      if (!role || !member) {
+        return null;
+      }
+
+      return {
+        id: crypto.randomUUID(),
+        roleId: role.id,
+        roleName: role.name,
+        memberId: member.id,
+        memberName: member.name,
+        order: index,
+      };
+    })
+    .filter(Boolean);
+
+const createSeedDeliverableStages = (ruleSet, deliverableIndex) => {
+  const stages = createDeliverableStagesFromRuleSet(ruleSet);
+
+  if (!stages.length) {
+    return stages;
+  }
+
+  const baseOffset = deliverableIndex * 3;
+  const pattern = deliverableIndex % 6;
+  const skippedOrders = new Set();
+  let completedCount = 0;
+  let currentOrder = 0;
+  let currentStatus = "active";
+
+  switch (pattern) {
+    case 1:
+      completedCount = Math.min(1, stages.length - 1);
+      currentOrder = Math.min(completedCount, stages.length - 1);
+      break;
+    case 2:
+      completedCount = Math.min(2, stages.length - 1);
+      currentOrder = Math.min(completedCount, stages.length - 1);
+      break;
+    case 3:
+      completedCount = stages.length;
+      currentOrder = -1;
+      break;
+    case 4:
+      completedCount = Math.min(Math.max(stages.length - 2, 0), stages.length - 1);
+      currentOrder = Math.min(completedCount, stages.length - 1);
+      currentStatus = "blocked";
+      break;
+    case 5:
+      if (stages.length >= 3) {
+        completedCount = 1;
+        skippedOrders.add(1);
+        currentOrder = 2;
+      } else {
+        currentOrder = Math.min(1, stages.length - 1);
+        currentStatus = "blocked";
+      }
+      break;
+    default:
+      completedCount = 0;
+      currentOrder = 0;
+      break;
+  }
+
+  const setCompletedStage = (stage, order) => {
+    const expectedOffset = baseOffset + order * 7;
+
+    stage.status = "completed";
+    stage.expectedDate = getSeedDateOffset(expectedOffset);
+    stage.completedDate = getSeedDateOffset(expectedOffset + ((deliverableIndex + order) % 3));
+  };
+
+  const setInFlightStage = (stage, order, status) => {
+    stage.status = status;
+    stage.expectedDate = getSeedDateOffset(baseOffset + order * 7 + 3);
+    stage.completedDate = null;
+  };
+
+  const setPendingStage = (stage, order) => {
+    stage.status = "pending";
+    stage.expectedDate = getSeedDateOffset(baseOffset + order * 7 + 7);
+    stage.completedDate = null;
+  };
+
+  const setSkippedStage = (stage, order) => {
+    stage.status = "skipped";
+    stage.expectedDate = getSeedDateOffset(baseOffset + order * 7 + 2);
+    stage.completedDate = null;
+  };
+
+  stages.forEach((stage, order) => {
+    if (completedCount === stages.length || order < completedCount) {
+      setCompletedStage(stage, order);
+      return;
+    }
+
+    if (skippedOrders.has(order)) {
+      setSkippedStage(stage, order);
+      return;
+    }
+
+    if (order === currentOrder) {
+      setInFlightStage(stage, order, currentStatus);
+      return;
+    }
+
+    setPendingStage(stage, order);
+  });
+
+  return stages;
+};
+
+const createSeedDeliverables = ({
+  projectId,
+  projectCode,
+  deliverableCount,
+  projectState,
+}) => {
+  const { members, packages, phases, roles, ruleSets, types, wbs } = projectState;
+
+  if (
+    !deliverableCount ||
+    !members.length ||
+    !phases.length ||
+    !roles.length ||
+    !ruleSets.length ||
+    !types.length ||
+    !wbs.length
+  ) {
+    return [];
+  }
+
+  const roleById = new Map(roles.map((role) => [role.id, role]));
+
+  return Array.from({ length: deliverableCount }, (_, index) => {
+    const deliverableType = types[index % types.length];
+    const ruleSet = ruleSets[(index + Math.floor(index / types.length)) % ruleSets.length];
+    const phase = phases[(index + Math.floor(index / ruleSets.length)) % phases.length];
+    const wbsItem = wbs[(index + Math.floor(index / phases.length)) % wbs.length];
+    const packageItem =
+      packages.length && index % 4 !== 0
+        ? packages[(index + Math.floor(index / 5)) % packages.length]
+        : null;
+    const codePrefix = getDeliverableTypeCode(deliverableType.name);
+
+    return createProjectScopedEntity(projectId, {
+      code: `${projectCode}-${codePrefix}-${String(index + 1).padStart(3, "0")}`,
+      typeId: deliverableType.id,
+      ruleSetId: ruleSet.id,
+      phaseId: phase.id,
+      wbsId: wbsItem.id,
+      packageId: packageItem?.id ?? null,
+      stages: createSeedDeliverableStages(ruleSet, index),
+      assignments: createSeedDeliverableAssignments(
+        deliverableType,
+        members,
+        roleById,
+        index,
+      ),
+    });
+  });
+};
+
 const createDeliverablesTableFilters = (project = null) => ({
   code: "",
   typeId: "",
@@ -261,7 +463,7 @@ let projects = [...projectOptionList.querySelectorAll("[data-project-id]")].map(
 );
 
 const projectStateStore = Object.fromEntries(
-  projects.map((project) => [project.id, createSeededProjectState(project.id)]),
+  projects.map((project) => [project.id, createSeededProjectState(project)]),
 );
 
 const definitionConfigs = {
@@ -549,6 +751,7 @@ let editingDefinition = {
 };
 let editingDeliverableTypeId = null;
 let editingRuleSetId = null;
+let selectedDeliverableId = null;
 
 const getProjectState = (projectId) => {
   if (!projectStateStore[projectId]) {
@@ -569,6 +772,12 @@ const getDefinitionItems = (view, projectId) => getProjectState(projectId)[view]
 const getRuleSets = (projectId) => getProjectState(projectId).ruleSets;
 
 const getDeliverables = (projectId) => getProjectState(projectId).deliverables;
+
+const getDeliverableById = (projectId, deliverableId) =>
+  getDeliverables(projectId).find((deliverable) => deliverable.id === deliverableId) ?? null;
+
+const getSelectedDeliverable = (projectId = currentProject.id) =>
+  selectedDeliverableId ? getDeliverableById(projectId, selectedDeliverableId) : null;
 
 const getRoles = (projectId) => getProjectState(projectId).roles;
 
@@ -649,6 +858,19 @@ const getDeliverableStages = (deliverable, projectId) => {
 
   return deliverable.stages;
 };
+
+const cloneDeliverableStages = (deliverable, projectId) =>
+  getDeliverableStages(deliverable, projectId).map((stage) => ({
+    ...stage,
+  }));
+
+const getDeliverableAssignmentSelectionMap = (deliverable = null) =>
+  new Map(
+    (deliverable?.assignments ?? []).map((assignment) => [
+      assignment.roleId ?? "",
+      assignment.memberId ?? "",
+    ]),
+  );
 
 const getDeliverableTypeAssignmentTemplates = (projectId, typeId) => {
   const deliverableType = findDefinitionItem("types", projectId, typeId);
@@ -1758,9 +1980,221 @@ const renderDeliverableStageCell = (deliverable, projectId, order) => {
         ${escapeHtml(getStageStatusLabel(stage.status))}
       </span>
       <span class="deliverables-stage-meta">
-        Exp ${escapeHtml(formatStageDate(stage.expectedDate))} · Act ${escapeHtml(formatStageDate(stage.completedDate))}
+        <span>Exp ${escapeHtml(formatStageDate(stage.expectedDate))}</span>
+        <span>Act ${escapeHtml(formatStageDate(stage.completedDate))}</span>
       </span>
     </div>
+  `;
+};
+
+const getDeliverableCurrentStage = (deliverable, projectId) => {
+  const stages = getDeliverableStages(deliverable, projectId);
+
+  return (
+    stages.find((stage) => stage.status === "active" || stage.status === "blocked") ??
+    stages.find((stage) => stage.status === "pending") ??
+    stages.at(-1) ??
+    null
+  );
+};
+
+const renderDeliverableCodeCell = (deliverable) => `
+  <button
+    class="deliverables-row-trigger${selectedDeliverableId === deliverable.id ? " is-selected" : ""}"
+    type="button"
+    data-action="open-deliverable-editor"
+    data-deliverable-id="${escapeHtml(deliverable.id)}"
+    aria-label="Open editor for deliverable ${escapeHtml(deliverable.code)}"
+  >
+    ${escapeHtml(deliverable.code)}
+  </button>
+`;
+
+const renderDeliverableEditorField = (label, value) => `
+  <div class="deliverable-editor-field">
+    <span>${escapeHtml(label)}</span>
+    <strong>${escapeHtml(value)}</strong>
+  </div>
+`;
+
+const renderDeliverableStageOverview = (deliverable, projectId) => {
+  const stages = getDeliverableStages(deliverable, projectId);
+
+  return `
+    <section class="deliverable-stage-overview">
+      <div class="deliverable-stage-overview-head">
+        <div>
+          <p class="definition-list-title">Stage progress</p>
+          <p class="deliverable-editor-copy">
+            Review the instantiated stage history for this deliverable.
+          </p>
+        </div>
+        <span class="ruleset-count-pill">${pluralize(stages.length, "stage")}</span>
+      </div>
+      <div class="deliverable-stage-overview-list">
+        ${stages
+          .map(
+            (stage) => `
+              <article class="deliverable-stage-overview-item">
+                <div class="deliverable-stage-overview-copy">
+                  <strong>${escapeHtml(stage.stageName)}</strong>
+                  <span>
+                    Exp ${escapeHtml(formatStageDate(stage.expectedDate))} ·
+                    Act ${escapeHtml(formatStageDate(stage.completedDate))}
+                  </span>
+                </div>
+                <span class="deliverables-stage-status is-${escapeHtml(getStageStatusTone(stage.status))}">
+                  ${escapeHtml(getStageStatusLabel(stage.status))}
+                </span>
+              </article>
+            `,
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+};
+
+const renderDeliverableEditorSection = (project) => {
+  const deliverable = getSelectedDeliverable(project.id);
+
+  if (!deliverable) {
+    return "";
+  }
+
+  const currentStage = getDeliverableCurrentStage(deliverable, project.id);
+
+  return `
+    <div class="deliverable-editor-head">
+      <div class="deliverable-editor-copy">
+        <p class="definition-list-title">Deliverable editor</p>
+        <h3 class="deliverable-editor-title" id="deliverableEditorTitle">${escapeHtml(deliverable.code)}</h3>
+        <p class="deliverable-editor-description">
+          Update editable fields and team assignments while keeping the current table context visible.
+        </p>
+      </div>
+      <button
+        class="definition-action"
+        type="button"
+        data-action="close-deliverable-editor"
+      >
+        Close
+      </button>
+    </div>
+    <form
+      class="deliverable-form deliverable-editor-form"
+      id="deliverableEditorForm"
+      data-deliverable-id="${escapeHtml(deliverable.id)}"
+    >
+      <input type="hidden" data-deliverable-field="typeId" value="${escapeHtml(deliverable.typeId)}" />
+      <input type="hidden" data-deliverable-field="ruleSetId" value="${escapeHtml(deliverable.ruleSetId)}" />
+
+      <section class="deliverable-editor-summary">
+        <div class="deliverable-editor-summary-grid">
+          ${renderDeliverableEditorField(
+            "Type",
+            getDefinitionDisplayName("types", project.id, deliverable.typeId),
+          )}
+          ${renderDeliverableEditorField(
+            "Lifecycle",
+            getRuleSetDisplayName(project.id, deliverable.ruleSetId),
+          )}
+          ${renderDeliverableEditorField(
+            "Current stage",
+            currentStage ? `${currentStage.stageName} · ${getStageStatusLabel(currentStage.status)}` : "—",
+          )}
+          ${renderDeliverableEditorField(
+            "Team slots",
+            String(getDeliverableAssignmentEntries(deliverable, project.id).length),
+          )}
+        </div>
+        <p class="deliverable-editor-note">
+          Deliverable type and lifecycle stage set stay fixed after creation in v1, so they are shown here as read-only.
+        </p>
+      </section>
+
+      <div class="deliverable-form-grid deliverable-editor-grid">
+        <label class="field field-full">
+          <span>Deliverable code</span>
+          <input
+            type="text"
+            data-deliverable-field="code"
+            value="${escapeHtml(deliverable.code)}"
+            placeholder="DRW-001"
+            autocomplete="off"
+            required
+          />
+        </label>
+        ${renderDeliverableSelectField({
+          key: "phaseId",
+          label: "Phase",
+          options: getDefinitionOptions("phases", project.id),
+          value: deliverable.phaseId ?? "",
+          placeholderLabel: getDefinitionItems("phases", project.id).length
+            ? "Select a phase"
+            : "Add a phase first",
+          required: true,
+          disabled: !getDefinitionItems("phases", project.id).length,
+        })}
+        ${renderDeliverableSelectField({
+          key: "wbsId",
+          label: "WBS",
+          options: getDefinitionOptions("wbs", project.id),
+          value: deliverable.wbsId ?? "",
+          placeholderLabel: getDefinitionItems("wbs", project.id).length
+            ? "Select a WBS item"
+            : "Add a WBS item first",
+          required: true,
+          disabled: !getDefinitionItems("wbs", project.id).length,
+        })}
+        ${renderDeliverableSelectField({
+          key: "packageId",
+          label: "Package",
+          options: getDefinitionOptions("packages", project.id),
+          value: deliverable.packageId ?? "",
+          placeholderLabel: "No package",
+        })}
+      </div>
+      <div data-deliverable-assignment-region>
+        ${renderDeliverableAssignmentSection(
+          project.id,
+          deliverable.typeId,
+          getDeliverableAssignmentSelectionMap(deliverable),
+        )}
+      </div>
+      ${renderDeliverableStageOverview(deliverable, project.id)}
+      <div class="deliverable-form-actions deliverable-editor-actions">
+        <button class="definition-action" type="button" data-action="close-deliverable-editor">
+          Close
+        </button>
+        <button class="primary-button" type="submit">
+          Save changes
+        </button>
+      </div>
+    </form>
+  `;
+};
+
+const renderDeliverableEditorOverlay = (project) => {
+  if (!getSelectedDeliverable(project.id)) {
+    return "";
+  }
+
+  return `
+    <button
+      class="deliverable-editor-backdrop"
+      type="button"
+      data-action="close-deliverable-editor"
+      aria-label="Close deliverable editor"
+    ></button>
+    <aside
+      class="definition-list-shell deliverable-editor-shell"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="deliverableEditorTitle"
+    >
+      ${renderDeliverableEditorSection(project)}
+    </aside>
   `;
 };
 
@@ -1770,6 +2204,7 @@ const baseDeliverableColumns = [
     label: "Code",
     filterKind: "text",
     getDisplayValue: (deliverable) => deliverable.code,
+    renderCell: (deliverable) => renderDeliverableCodeCell(deliverable),
   },
   {
     key: "typeId",
@@ -2358,7 +2793,7 @@ const renderDeliverablesTableSection = (project) => {
   const columns = getDeliverableColumns(project.id);
   const hasFilters = Object.values(deliverablesTableState.filters).some(Boolean);
   const selectedRuleSet = getActiveDeliverableStageRuleSet(project.id);
-  const tableMinWidth = 1340 + (selectedRuleSet?.stages.length ?? 0) * 170;
+  const tableMinWidth = 1120 + (selectedRuleSet?.stages.length ?? 0) * 142;
 
   return `
     <div class="deliverables-table-head">
@@ -2391,7 +2826,7 @@ const renderDeliverablesTableSection = (project) => {
               ? filteredDeliverables
                   .map(
                     (deliverable) => `
-                      <tr>
+                      <tr class="deliverables-row${selectedDeliverableId === deliverable.id ? " is-selected" : ""}">
                         ${columns
                           .map(
                             (column) => `
@@ -2425,6 +2860,7 @@ const renderDeliverablesTableSection = (project) => {
 
 const renderDeliverablesBody = (project) => {
   const { missingRequirements, message } = getMissingDeliverableRequirementsSummary(project.id);
+  const hasSelectedDeliverable = Boolean(getSelectedDeliverable(project.id));
 
   return `
     <section class="definition-stack">
@@ -2438,9 +2874,18 @@ const renderDeliverablesBody = (project) => {
           : ""
       }
 
-      <section class="definition-list-shell" id="deliverablesTableSection">
-        ${renderDeliverablesTableSection(project)}
-      </section>
+      <div class="deliverables-layout">
+        <section class="definition-list-shell deliverables-shell" id="deliverablesTableSection">
+          ${renderDeliverablesTableSection(project)}
+        </section>
+      </div>
+      <div
+        class="deliverable-editor-overlay"
+        id="deliverableEditorSection"
+        ${hasSelectedDeliverable ? "" : "hidden"}
+      >
+        ${renderDeliverableEditorOverlay(project)}
+      </div>
     </section>
   `;
 };
@@ -2807,6 +3252,7 @@ const validateProjectValues = (
 const renderView = () => {
   if (currentView !== "deliverables") {
     closeDeliverableModal({ restoreFocus: false });
+    selectedDeliverableId = null;
   }
 
   const config = viewMeta[currentView];
@@ -3297,7 +3743,11 @@ const collectDeliverableFormData = (form) => ({
   })),
 });
 
-const validateDeliverableForm = (form, projectId) => {
+const validateDeliverableForm = (
+  form,
+  projectId,
+  { excludingId = null, existingDeliverable = null } = {},
+) => {
   const values = collectDeliverableFormData(form);
   const { missingRequirements, message: missingRequirementsMessage } =
     getMissingDeliverableRequirementsSummary(projectId);
@@ -3311,7 +3761,9 @@ const validateDeliverableForm = (form, projectId) => {
 
   if (
     getDeliverables(projectId).some(
-      (deliverable) => normalizeValue(deliverable.code) === normalizeValue(values.code),
+      (deliverable) =>
+        deliverable.id !== excludingId &&
+        normalizeValue(deliverable.code) === normalizeValue(values.code),
     )
   ) {
     return {
@@ -3435,7 +3887,10 @@ const validateDeliverableForm = (form, projectId) => {
       code: values.code,
       typeId: values.typeId,
       ruleSetId: values.ruleSetId,
-      stages: createDeliverableStagesFromRuleSet(findRuleSet(projectId, values.ruleSetId)),
+      stages:
+        existingDeliverable && existingDeliverable.ruleSetId === values.ruleSetId
+          ? cloneDeliverableStages(existingDeliverable, projectId)
+          : createDeliverableStagesFromRuleSet(findRuleSet(projectId, values.ruleSetId)),
       phaseId: values.phaseId,
       wbsId: values.wbsId,
       packageId: values.packageId || null,
@@ -3475,6 +3930,14 @@ const syncDeliverableAssignmentSection = (
   if (focusFirstAssignment) {
     assignmentRegion.querySelector("[data-deliverable-assignment-member]")?.focus();
   }
+};
+
+const bindDeliverablesToolbar = () => {
+  const openButton = workspaceBody.querySelector('[data-action="open-deliverable-modal"]');
+
+  openButton?.addEventListener("click", () => {
+    openDeliverableModal();
+  });
 };
 
 const bindDeliverablesTableControls = () => {
@@ -3531,8 +3994,41 @@ const bindDeliverablesTableControls = () => {
     deliverablesTableState.filters.phaseId = phaseViewControl.value;
     updateDeliverablesTableSection({
       focusSelector: '[data-action="deliverable-phase-view"]',
+      });
+  });
+};
+
+const bindDeliverableRowButtons = () => {
+  const rowButtons = workspaceBody.querySelectorAll('[data-action="open-deliverable-editor"]');
+
+  rowButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const deliverableId = button.dataset.deliverableId;
+
+      if (!deliverableId) {
+        return;
+      }
+
+      openDeliverableEditor(deliverableId);
     });
   });
+};
+
+const syncDeliverableEditorOverlay = () => {
+  const editorSection = document.getElementById("deliverableEditorSection");
+  const hasSelectedDeliverable = Boolean(getSelectedDeliverable(currentProject.id));
+
+  document.body.classList.toggle("has-drawer-open", hasSelectedDeliverable);
+
+  if (editorSection) {
+    editorSection.hidden = !hasSelectedDeliverable;
+
+    if (!hasSelectedDeliverable) {
+      editorSection.innerHTML = "";
+    }
+  }
+
+  return hasSelectedDeliverable;
 };
 
 const updateDeliverablesTableSection = ({ focusFilterKey = null, focusSelector = null } = {}) => {
@@ -3552,7 +4048,9 @@ const updateDeliverablesTableSection = ({ focusFilterKey = null, focusSelector =
     activeElement instanceof HTMLInputElement ? activeElement.selectionEnd ?? null : null;
 
   tableSection.innerHTML = renderDeliverablesTableSection(currentProject);
-  bindDeliverablesView();
+  bindDeliverablesToolbar();
+  bindDeliverablesTableControls();
+  bindDeliverableRowButtons();
 
   if (focusSelector) {
     tableSection.querySelector(focusSelector)?.focus();
@@ -3585,7 +4083,51 @@ const updateDeliverablesTableSection = ({ focusFilterKey = null, focusSelector =
   }
 };
 
-const bindDeliverableForm = (form) => {
+const updateDeliverableEditorSection = ({ focusField = false } = {}) => {
+  const editorSection = document.getElementById("deliverableEditorSection");
+
+  if (selectedDeliverableId && !getSelectedDeliverable(currentProject.id)) {
+    selectedDeliverableId = null;
+  }
+
+  const hasSelectedDeliverable = syncDeliverableEditorOverlay();
+
+  if (!editorSection || !hasSelectedDeliverable) {
+    return;
+  }
+
+  editorSection.innerHTML = renderDeliverableEditorOverlay(currentProject);
+  bindDeliverableEditorSection();
+
+  if (focusField) {
+    focusFirstField("#deliverableEditorForm [data-deliverable-field=\"code\"]");
+  }
+};
+
+const openDeliverableEditor = (deliverableId) => {
+  if (!getDeliverableById(currentProject.id, deliverableId)) {
+    return;
+  }
+
+  selectedDeliverableId = deliverableId;
+  updateDeliverablesTableSection();
+  updateDeliverableEditorSection({ focusField: true });
+};
+
+const closeDeliverableEditor = () => {
+  if (!selectedDeliverableId) {
+    return;
+  }
+
+  selectedDeliverableId = null;
+  updateDeliverablesTableSection();
+  updateDeliverableEditorSection();
+};
+
+const bindDeliverableForm = (
+  form,
+  { projectId = currentProject.id, deliverable = null, onSuccess = null } = {},
+) => {
   if (!form) {
     return;
   }
@@ -3621,7 +4163,10 @@ const bindDeliverableForm = (form) => {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
 
-    const validation = validateDeliverableForm(form, currentProject.id);
+    const validation = validateDeliverableForm(form, projectId, {
+      excludingId: deliverable?.id ?? null,
+      existingDeliverable: deliverable,
+    });
 
     if (!("payload" in validation)) {
       const field =
@@ -3632,11 +4177,15 @@ const bindDeliverableForm = (form) => {
       return;
     }
 
-    getDeliverables(currentProject.id).push(
-      createProjectScopedEntity(currentProject.id, validation.payload),
-    );
-    closeDeliverableModal();
-    updateDeliverablesTableSection();
+    const savedDeliverable = deliverable ?? createProjectScopedEntity(projectId, validation.payload);
+
+    Object.assign(savedDeliverable, validation.payload);
+
+    if (!deliverable) {
+      getDeliverables(projectId).push(savedDeliverable);
+    }
+
+    onSuccess?.(savedDeliverable);
   });
 };
 
@@ -3644,7 +4193,13 @@ const bindDeliverableModal = () => {
   const form = deliverableModal.querySelector("#deliverableForm");
   const closeButtons = deliverableModal.querySelectorAll('[data-action="cancel-deliverable-modal"]');
 
-  bindDeliverableForm(form);
+  bindDeliverableForm(form, {
+    onSuccess: () => {
+      closeDeliverableModal();
+      updateDeliverablesTableSection();
+      updateDeliverableEditorSection();
+    },
+  });
 
   closeButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -3653,14 +4208,33 @@ const bindDeliverableModal = () => {
   });
 };
 
-const bindDeliverablesView = () => {
-  const openButton = workspaceBody.querySelector('[data-action="open-deliverable-modal"]');
+const bindDeliverableEditorSection = () => {
+  const form = document.getElementById("deliverableEditorForm");
+  const closeButtons = workspaceBody.querySelectorAll('[data-action="close-deliverable-editor"]');
+  const deliverableId = form?.dataset.deliverableId ?? "";
+  const deliverable = deliverableId ? getDeliverableById(currentProject.id, deliverableId) : null;
 
-  bindDeliverablesTableControls();
-
-  openButton?.addEventListener("click", () => {
-    openDeliverableModal();
+  bindDeliverableForm(form, {
+    deliverable,
+    onSuccess: (savedDeliverable) => {
+      selectedDeliverableId = savedDeliverable.id;
+      updateDeliverablesTableSection();
+      updateDeliverableEditorSection();
+    },
   });
+
+  closeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      closeDeliverableEditor();
+    });
+  });
+};
+
+const bindDeliverablesView = () => {
+  bindDeliverablesToolbar();
+  bindDeliverablesTableControls();
+  bindDeliverableRowButtons();
+  bindDeliverableEditorSection();
 };
 
 const slugify = (value) =>
@@ -3836,6 +4410,7 @@ projectOptionList.addEventListener("click", (event) => {
   currentProject =
     projects.find((project) => project.id === option.dataset.projectId) ?? currentProject;
   closeDeliverableModal({ restoreFocus: false });
+  selectedDeliverableId = null;
   resetDeliverablesTableState();
   resetDefinitionEditingState();
   closeProjectEditor();
@@ -3864,6 +4439,9 @@ menuItems.forEach((item) => {
     currentView = item.dataset.view;
     closeProjectEditor();
     resetDefinitionEditingState();
+    if (currentView !== "deliverables") {
+      selectedDeliverableId = null;
+    }
     setActiveMenu(currentView);
     renderView();
     closeProjectDropdown();
@@ -3898,6 +4476,12 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && isDeliverableModalOpen()) {
     event.preventDefault();
     closeDeliverableModal();
+    return;
+  }
+
+  if (event.key === "Escape" && getSelectedDeliverable(currentProject.id)) {
+    event.preventDefault();
+    closeDeliverableEditor();
     return;
   }
 
