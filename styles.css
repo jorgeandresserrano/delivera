@@ -982,6 +982,58 @@ button {
   background: #fffdfa;
 }
 
+.deliverable-stage-editor-list {
+  gap: 10px;
+}
+
+.deliverable-stage-editor-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.deliverable-stage-editor-meta {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.deliverable-stage-editor-fields {
+  display: grid;
+  grid-template-columns: minmax(148px, 0.78fr) repeat(2, minmax(208px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.deliverable-stage-editor-fields .field {
+  min-width: 0;
+}
+
+.deliverable-stage-editor-fields select,
+.deliverable-stage-editor-fields input[type="date"] {
+  min-width: 0;
+  font-size: 0.95rem;
+}
+
+.deliverable-stage-editor-fields input[type="date"] {
+  position: relative;
+  padding-right: 42px;
+  font-variant-numeric: tabular-nums;
+}
+
+.deliverable-stage-editor-fields input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: 12px;
+  margin-left: 0;
+}
+
+.deliverable-stage-editor-fields input:disabled {
+  background: rgba(244, 241, 234, 0.76);
+  color: var(--text-muted);
+}
+
 .deliverable-stage-overview-copy {
   display: grid;
   gap: 3px;
@@ -1700,6 +1752,11 @@ button {
 
   .deliverable-editor-summary-grid,
   .deliverable-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .deliverable-stage-editor-row,
+  .deliverable-stage-editor-fields {
     grid-template-columns: minmax(0, 1fr);
   }
 

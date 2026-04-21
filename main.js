@@ -859,11 +859,6 @@ const getDeliverableStages = (deliverable, projectId) => {
   return deliverable.stages;
 };
 
-const cloneDeliverableStages = (deliverable, projectId) =>
-  getDeliverableStages(deliverable, projectId).map((stage) => ({
-    ...stage,
-  }));
-
 const getDeliverableAssignmentSelectionMap = (deliverable = null) =>
   new Map(
     (deliverable?.assignments ?? []).map((assignment) => [
@@ -1200,6 +1195,31 @@ const requestRuleSetDeletion = (ruleSetId) => {
     subject: ruleSet.name,
     onConfirm: () => {
       deleteRuleSet(ruleSetId);
+    },
+  });
+};
+
+const deleteDeliverable = (deliverableId) => {
+  getProjectState(currentProject.id).deliverables = getDeliverables(currentProject.id).filter(
+    (item) => item.id !== deliverableId,
+  );
+
+  closeDeliverableEditor();
+};
+
+const requestDeliverableDeletion = (deliverableId) => {
+  const deliverable = getDeliverableById(currentProject.id, deliverableId);
+
+  if (!deliverable) {
+    return;
+  }
+
+  openConfirmationModal({
+    title: "Delete deliverable?",
+    message: `This will permanently remove the deliverable from ${currentProject.name}. This action cannot be undone.`,
+    subject: deliverable.code,
+    onConfirm: () => {
+      deleteDeliverable(deliverableId);
     },
   });
 };
@@ -1952,6 +1972,20 @@ const getStageStatusTone = (status = "pending") => {
   return tones[status] ?? "pending";
 };
 
+const DELIVERABLE_STAGE_STATUS_OPTIONS = ["pending", "active", "blocked", "completed", "skipped"].map(
+  (status) => ({
+    value: status,
+    label: getStageStatusLabel(status),
+  }),
+);
+
+const isValidDeliverableStageStatus = (status) =>
+  DELIVERABLE_STAGE_STATUS_OPTIONS.some((option) => option.value === status);
+
+const isValidStageDateInput = (value = "") => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+const normalizeStageDateInput = (value = "") => value.trim() || null;
+
 const formatStageDate = (value) => (value ? value : "—");
 
 const getDeliverableStageEntry = (deliverable, projectId, order) =>
@@ -2025,27 +2059,54 @@ const renderDeliverableStageOverview = (deliverable, projectId) => {
       <div class="deliverable-stage-overview-head">
         <div>
           <p class="definition-list-title">Stage progress</p>
-          <p class="deliverable-editor-copy">
-            Review the instantiated stage history for this deliverable.
+          <p class="deliverable-editor-description">
+            Update the instantiated stage status and dates for this deliverable.
           </p>
         </div>
         <span class="ruleset-count-pill">${pluralize(stages.length, "stage")}</span>
       </div>
-      <div class="deliverable-stage-overview-list">
+      <div class="deliverable-stage-overview-list deliverable-stage-editor-list">
         ${stages
           .map(
             (stage) => `
-              <article class="deliverable-stage-overview-item">
-                <div class="deliverable-stage-overview-copy">
-                  <strong>${escapeHtml(stage.stageName)}</strong>
-                  <span>
-                    Exp ${escapeHtml(formatStageDate(stage.expectedDate))} ·
-                    Act ${escapeHtml(formatStageDate(stage.completedDate))}
-                  </span>
+              <article
+                class="deliverable-stage-overview-item deliverable-stage-editor-row"
+                data-deliverable-stage-row
+                data-stage-id="${escapeHtml(stage.id)}"
+                data-stage-order="${escapeHtml(String(stage.order ?? 0))}"
+                data-stage-name="${escapeHtml(stage.stageName)}"
+              >
+                <div class="deliverable-stage-editor-meta">
+                  <span class="ruleset-rule-order">${String((stage.order ?? 0) + 1).padStart(2, "0")}</span>
+                  <div class="deliverable-stage-overview-copy">
+                    <strong>${escapeHtml(stage.stageName)}</strong>
+                    <span>Shown in the current lifecycle sequence.</span>
+                  </div>
                 </div>
-                <span class="deliverables-stage-status is-${escapeHtml(getStageStatusTone(stage.status))}">
-                  ${escapeHtml(getStageStatusLabel(stage.status))}
-                </span>
+                <div class="deliverable-stage-editor-fields">
+                  <label class="field">
+                    <span>Status</span>
+                    <select data-deliverable-stage-field="status">
+                      ${renderSelectOptions(DELIVERABLE_STAGE_STATUS_OPTIONS, stage.status)}
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Expected</span>
+                    <input
+                      type="date"
+                      data-deliverable-stage-field="expectedDate"
+                      value="${escapeHtml(stage.expectedDate ?? "")}"
+                    />
+                  </label>
+                  <label class="field">
+                    <span>Actual</span>
+                    <input
+                      type="date"
+                      data-deliverable-stage-field="completedDate"
+                      value="${escapeHtml(stage.completedDate ?? "")}"
+                    />
+                  </label>
+                </div>
               </article>
             `,
           )
@@ -2164,6 +2225,14 @@ const renderDeliverableEditorSection = (project) => {
       </div>
       ${renderDeliverableStageOverview(deliverable, project.id)}
       <div class="deliverable-form-actions deliverable-editor-actions">
+        <button
+          class="definition-action definition-action-danger"
+          type="button"
+          data-action="delete-deliverable"
+          style="margin-right: auto;"
+        >
+          Delete deliverable
+        </button>
         <button class="definition-action" type="button" data-action="close-deliverable-editor">
           Close
         </button>
@@ -3253,6 +3322,7 @@ const renderView = () => {
   if (currentView !== "deliverables") {
     closeDeliverableModal({ restoreFocus: false });
     selectedDeliverableId = null;
+    document.body.classList.remove("has-drawer-open");
   }
 
   const config = viewMeta[currentView];
@@ -3743,14 +3813,125 @@ const collectDeliverableFormData = (form) => ({
   })),
 });
 
+const collectDeliverableStageFormData = (form) =>
+  [...form.querySelectorAll("[data-deliverable-stage-row]")].map((row) => ({
+    row,
+    id: row.dataset.stageId ?? "",
+    order: Number(row.dataset.stageOrder ?? "0"),
+    stageName: row.dataset.stageName ?? "",
+    status: row.querySelector('[data-deliverable-stage-field="status"]')?.value.trim() ?? "",
+    expectedDate:
+      row.querySelector('[data-deliverable-stage-field="expectedDate"]')?.value.trim() ?? "",
+    completedDate:
+      row.querySelector('[data-deliverable-stage-field="completedDate"]')?.value.trim() ?? "",
+  }));
+
+const validateDeliverableStageForm = (form, deliverable, projectId) => {
+  if (!deliverable) {
+    return {
+      stages: createDeliverableStagesFromRuleSet(
+        findRuleSet(projectId, form.querySelector('[data-deliverable-field="ruleSetId"]')?.value.trim() ?? ""),
+      ),
+    };
+  }
+
+  const existingStages = getDeliverableStages(deliverable, projectId);
+  const stageRows = collectDeliverableStageFormData(form);
+
+  if (stageRows.length !== existingStages.length) {
+    return {
+      field: "ruleSetId",
+      message: "Refresh the stage progress editor and try again.",
+    };
+  }
+
+  const inFlightStages = [];
+  const stages = [];
+
+  for (const stageRow of stageRows) {
+    const statusField = stageRow.row.querySelector('[data-deliverable-stage-field="status"]');
+    const expectedDateField = stageRow.row.querySelector('[data-deliverable-stage-field="expectedDate"]');
+    const completedDateField = stageRow.row.querySelector('[data-deliverable-stage-field="completedDate"]');
+    const existingStage =
+      existingStages.find((stage) => stage.id === stageRow.id) ??
+      existingStages.find((stage) => (stage.order ?? 0) === stageRow.order) ??
+      null;
+
+    if (!existingStage) {
+      return {
+        field: "ruleSetId",
+        message: "This deliverable contains invalid stages. Refresh and try again.",
+      };
+    }
+
+    if (!isValidDeliverableStageStatus(stageRow.status)) {
+      return {
+        field: statusField,
+        message: `Choose a valid status for ${existingStage.stageName}.`,
+      };
+    }
+
+    if (!isValidStageDateInput(stageRow.expectedDate)) {
+      return {
+        field: expectedDateField,
+        message: `Enter a valid expected date for ${existingStage.stageName}.`,
+      };
+    }
+
+    if (!isValidStageDateInput(stageRow.completedDate)) {
+      return {
+        field: completedDateField,
+        message: `Enter a valid actual date for ${existingStage.stageName}.`,
+      };
+    }
+
+    const expectedDate = normalizeStageDateInput(stageRow.expectedDate);
+    const completedDate = normalizeStageDateInput(stageRow.completedDate);
+
+    if (stageRow.status === "completed" && !completedDate) {
+      return {
+        field: completedDateField,
+        message: `Enter an actual date for ${existingStage.stageName} when the stage is marked done.`,
+      };
+    }
+
+    if (stageRow.status === "active" || stageRow.status === "blocked") {
+      inFlightStages.push(existingStage.stageName);
+    }
+
+    stages.push({
+      ...existingStage,
+      status: stageRow.status,
+      expectedDate,
+      completedDate,
+    });
+  }
+
+  if (inFlightStages.length > 1) {
+    return {
+      field: form.querySelector('[data-deliverable-stage-field="status"]'),
+      message: `Only one stage can be active or blocked at a time. Update ${formatLabelList(inFlightStages)}.`,
+    };
+  }
+
+  return {
+    stages,
+  };
+};
+
 const validateDeliverableForm = (
   form,
   projectId,
   { excludingId = null, existingDeliverable = null } = {},
 ) => {
   const values = collectDeliverableFormData(form);
+  const stageValidation = validateDeliverableStageForm(form, existingDeliverable, projectId);
   const { missingRequirements, message: missingRequirementsMessage } =
     getMissingDeliverableRequirementsSummary(projectId);
+
+  if (!("stages" in stageValidation)) {
+    return stageValidation;
+  }
 
   if (!values.code) {
     return {
@@ -3889,7 +4070,7 @@ const validateDeliverableForm = (
       ruleSetId: values.ruleSetId,
       stages:
         existingDeliverable && existingDeliverable.ruleSetId === values.ruleSetId
-          ? cloneDeliverableStages(existingDeliverable, projectId)
+          ? stageValidation.stages
           : createDeliverableStagesFromRuleSet(findRuleSet(projectId, values.ruleSetId)),
       phaseId: values.phaseId,
       wbsId: values.wbsId,
@@ -3930,6 +4111,27 @@ const syncDeliverableAssignmentSection = (
   if (focusFirstAssignment) {
     assignmentRegion.querySelector("[data-deliverable-assignment-member]")?.focus();
   }
+};
+
+const syncDeliverableStageRowState = (row) => {
+  if (!(row instanceof HTMLElement)) {
+    return;
+  }
+
+  const statusField = row.querySelector('[data-deliverable-stage-field="status"]');
+  const completedDateField = row.querySelector('[data-deliverable-stage-field="completedDate"]');
+
+  if (!(completedDateField instanceof HTMLInputElement)) {
+    return;
+  }
+
+  completedDateField.setCustomValidity("");
+};
+
+const syncDeliverableStageEditorSection = (form) => {
+  form
+    .querySelectorAll("[data-deliverable-stage-row]")
+    .forEach((row) => syncDeliverableStageRowState(row));
 };
 
 const bindDeliverablesToolbar = () => {
@@ -4157,8 +4359,18 @@ const bindDeliverableForm = (
       syncDeliverableAssignmentSection(form, currentProject.id, {
         focusFirstAssignment: true,
       });
+      return;
+    }
+
+    if (
+      event.target instanceof HTMLSelectElement &&
+      event.target.dataset.deliverableStageField === "status"
+    ) {
+      syncDeliverableStageRowState(event.target.closest("[data-deliverable-stage-row]"));
     }
   });
+
+  syncDeliverableStageEditorSection(form);
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -4211,6 +4423,7 @@ const bindDeliverableModal = () => {
 const bindDeliverableEditorSection = () => {
   const form = document.getElementById("deliverableEditorForm");
   const closeButtons = workspaceBody.querySelectorAll('[data-action="close-deliverable-editor"]');
+  const deleteButtons = workspaceBody.querySelectorAll('[data-action="delete-deliverable"]');
   const deliverableId = form?.dataset.deliverableId ?? "";
   const deliverable = deliverableId ? getDeliverableById(currentProject.id, deliverableId) : null;
 
@@ -4226,6 +4439,12 @@ const bindDeliverableEditorSection = () => {
   closeButtons.forEach((button) => {
     button.addEventListener("click", () => {
       closeDeliverableEditor();
+    });
+  });
+
+  deleteButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      if (deliverableId) requestDeliverableDeletion(deliverableId);
     });
   });
 };
