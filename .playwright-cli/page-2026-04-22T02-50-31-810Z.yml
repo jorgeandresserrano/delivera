@@ -1,0 +1,120 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: D
+      - generic [ref=e6]:
+        - paragraph [ref=e7]: Internal tool
+        - heading "Delivera" [level=1] [ref=e8]
+      - button "Collapse left menu" [expanded] [ref=e9] [cursor=pointer]:
+        - generic [ref=e10]: ‹
+    - generic [ref=e11]:
+      - paragraph [ref=e12]: Project
+      - button "Select project" [ref=e13] [cursor=pointer]:
+        - generic [ref=e14]: VE
+        - generic [ref=e15]:
+          - strong [ref=e16]: Verification Project
+          - generic [ref=e17]: VER-01
+        - generic [ref=e18]: ▾
+    - generic [ref=e19]:
+      - paragraph [ref=e20]: Main
+      - button "Deliverables" [ref=e21] [cursor=pointer]:
+        - img [ref=e23]
+        - generic [ref=e28]: Deliverables
+    - generic [ref=e29]:
+      - paragraph [ref=e30]: Definitions
+      - button "Deliverable Types" [ref=e31] [cursor=pointer]:
+        - img [ref=e33]
+        - generic [ref=e34]: Deliverable Types
+      - button "Lifecycle Stages" [ref=e35] [cursor=pointer]:
+        - img [ref=e37]
+        - generic [ref=e43]: Lifecycle Stages
+      - button "Phases" [ref=e44] [cursor=pointer]:
+        - img [ref=e46]
+        - generic [ref=e48]: Phases
+      - button "WBS" [ref=e49] [cursor=pointer]:
+        - img [ref=e51]
+        - generic [ref=e55]: WBS
+      - button "Packages" [ref=e56] [cursor=pointer]:
+        - img [ref=e58]
+        - generic [ref=e62]: Packages
+      - button "Roles" [ref=e63] [cursor=pointer]:
+        - img [ref=e65]
+        - generic [ref=e68]: Roles
+      - button "Members" [ref=e69] [cursor=pointer]:
+        - img [ref=e71]
+        - generic [ref=e76]: Members
+  - main [ref=e77]:
+    - generic [ref=e78]:
+      - paragraph [ref=e79]: Verification Project
+      - heading "Deliverables" [level=2] [ref=e109]
+      - generic [ref=e110]:
+        - generic [ref=e111]: Create at least one deliverable type, lifecycle stage set, project phase, WBS item, and member before adding deliverables.
+        - generic [ref=e113]:
+          - generic [ref=e114]:
+            - generic [ref=e115]:
+              - paragraph [ref=e116]: Deliverables
+              - generic [ref=e117]: "0"
+            - generic [ref=e118]:
+              - generic [ref=e119]:
+                - generic [ref=e120]: View stages
+                - combobox "View stages" [ref=e121]:
+                  - option "All lifecycle sets" [selected]
+              - generic [ref=e122]:
+                - generic [ref=e123]: View phase
+                - combobox "View phase" [ref=e124]:
+                  - option "All phases" [selected]
+              - button "Create deliverable" [ref=e125] [cursor=pointer]
+          - table [ref=e127]:
+            - rowgroup [ref=e128]:
+              - row "Code Filter code Type All Team Filter team Lifecycle Stages All Phase All WBS All Package All" [ref=e129]:
+                - columnheader "Code Filter code" [ref=e130]:
+                  - generic [ref=e131]:
+                    - button "Code" [ref=e132] [cursor=pointer]:
+                      - generic [ref=e133]: Code
+                      - generic [ref=e134]: ↑
+                    - searchbox "Filter code" [ref=e135]
+                - columnheader "Type All" [ref=e136]:
+                  - generic [ref=e137]:
+                    - button "Type" [ref=e138] [cursor=pointer]:
+                      - generic [ref=e139]: Type
+                      - generic [ref=e140]: ↕
+                    - combobox "Filter type" [ref=e141]:
+                      - option "All" [selected]
+                - columnheader "Team Filter team" [ref=e142]:
+                  - generic [ref=e143]:
+                    - button "Team" [ref=e144] [cursor=pointer]:
+                      - generic [ref=e145]: Team
+                      - generic [ref=e146]: ↕
+                    - searchbox "Filter team" [ref=e147]
+                - columnheader "Lifecycle Stages All" [ref=e148]:
+                  - generic [ref=e149]:
+                    - button "Lifecycle Stages" [ref=e150] [cursor=pointer]:
+                      - generic [ref=e151]: Lifecycle Stages
+                      - generic [ref=e152]: ↕
+                    - combobox "Filter lifecycle stages" [ref=e153]:
+                      - option "All" [selected]
+                - columnheader "Phase All" [ref=e154]:
+                  - generic [ref=e155]:
+                    - button "Phase" [ref=e156] [cursor=pointer]:
+                      - generic [ref=e157]: Phase
+                      - generic [ref=e158]: ↕
+                    - combobox "Filter phase" [ref=e159]:
+                      - option "All" [selected]
+                - columnheader "WBS All" [ref=e160]:
+                  - generic [ref=e161]:
+                    - button "WBS" [ref=e162] [cursor=pointer]:
+                      - generic [ref=e163]: WBS
+                      - generic [ref=e164]: ↕
+                    - combobox "Filter wbs" [ref=e165]:
+                      - option "All" [selected]
+                - columnheader "Package All" [ref=e166]:
+                  - generic [ref=e167]:
+                    - button "Package" [ref=e168] [cursor=pointer]:
+                      - generic [ref=e169]: Package
+                      - generic [ref=e170]: ↕
+                    - combobox "Filter package" [ref=e171]:
+                      - option "All" [selected]
+                      - option "No package"
+            - rowgroup [ref=e172]:
+              - row "No deliverables yet for Verification Project." [ref=e173]:
+                - cell "No deliverables yet for Verification Project." [ref=e174]

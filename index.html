@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Delivera</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20260421-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -46,49 +46,18 @@
             aria-label="Select project"
             aria-expanded="false"
           >
-            <span class="project-trigger-mark" id="activeProjectMark" aria-hidden="true">NR</span>
+            <span class="project-trigger-mark" id="activeProjectMark" aria-hidden="true">PR</span>
             <span class="project-trigger-copy">
-              <strong id="activeProjectName">North River Upgrade</strong>
-              <span id="activeProjectCode">NRU-01</span>
+              <strong id="activeProjectName">No projects</strong>
+              <span id="activeProjectCode">Create a project</span>
             </span>
             <span class="project-trigger-icon" aria-hidden="true">▾</span>
           </button>
 
           <div class="project-dropdown" id="projectDropdown" hidden>
-            <div class="project-option-list" id="projectOptionList">
-              <button
-                class="project-option is-selected"
-                type="button"
-                data-project-id="north-river"
-                data-project-name="North River Upgrade"
-                data-project-code="NRU-01"
-              >
-                <strong>North River Upgrade</strong>
-                <span>NRU-01</span>
-              </button>
-              <button
-                class="project-option"
-                type="button"
-                data-project-id="west-annex"
-                data-project-name="West Annex Retrofit"
-                data-project-code="WAR-04"
-              >
-                <strong>West Annex Retrofit</strong>
-                <span>WAR-04</span>
-              </button>
-              <button
-                class="project-option"
-                type="button"
-                data-project-id="ore-handling"
-                data-project-name="Ore Handling Expansion"
-                data-project-code="OHE-02"
-              >
-                <strong>Ore Handling Expansion</strong>
-                <span>OHE-02</span>
-              </button>
-            </div>
+            <div class="project-option-list" id="projectOptionList"></div>
             <div class="project-divider"></div>
-            <button class="project-option project-option-manage" id="editProjectOption" type="button">
+            <button class="project-option project-option-manage" id="editProjectOption" type="button" disabled>
               <strong>Edit current project</strong>
               <span>Rename, archive, or delete</span>
             </button>
@@ -196,7 +165,7 @@
 
       <main class="workspace">
         <section class="workspace-panel" id="workspacePanel">
-          <p class="workspace-eyebrow" id="workspaceEyebrow">North River Upgrade</p>
+          <p class="workspace-eyebrow" id="workspaceEyebrow">Projects</p>
           <h2 class="workspace-title" id="workspaceTitle">Deliverables</h2>
           <p class="workspace-copy" id="workspaceCopy">
             Project-scoped lifecycle tracking lives here.
@@ -238,6 +207,6 @@
       </div>
     </div>
 
-    <script type="module" src="main.js"></script>
+    <script type="module" src="main.js?v=20260421-1"></script>
   </body>
 </html>

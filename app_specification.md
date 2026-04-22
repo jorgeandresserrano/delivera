@@ -71,7 +71,7 @@ Important decisions:
 - deliverables do not have a separate title/name in v1
 - current stage is derived from the deliverable's stage records rather than stored as a duplicate field
 
-Because deliverable type and the selected lifecycle stage set drive stage and assignment instantiation, they are creation-time structural choices and should be treated as fixed after creation in v1.
+Because deliverable type and its assigned lifecycle stage set drive stage and assignment instantiation, they are creation-time structural choices and should be treated as fixed after creation in v1.
 
 ---
 
@@ -87,11 +87,17 @@ Examples:
 
 Deliverable types also define the assignment role templates used when a deliverable is created.
 
+Each deliverable type must also define the lifecycle stage set that will be used for every deliverable of that type.
+
 Each deliverable type can include multiple role rows.
 
 Each assignment template row on a deliverable type defines:
 
 - one role
+
+Each deliverable type also defines:
+
+- one lifecycle stage set
 
 Important rule:
 
@@ -124,7 +130,7 @@ A Lifecycle Stage Set is a reusable project-scoped template that defines an orde
 Each lifecycle stage set:
 
 - belongs to a project
-- is selected manually on each deliverable
+- is assigned on the deliverable type and inherited by deliverables created from that type
 - contains multiple stages
 - does not contain any dates
 
@@ -151,7 +157,7 @@ Dates must never be stored on the lifecycle stage definition.
 
 Instead:
 
-- each deliverable instantiates its own stage records from the selected lifecycle stage set
+- each deliverable instantiates its own stage records from the lifecycle stage set assigned by its type
 - each deliverable-stage record stores:
   - expected due date
   - actual completion date
@@ -327,7 +333,7 @@ Creating a deliverable must be a single transactional operation.
 When a deliverable is created, the system must:
 
 1. create the deliverable row
-2. instantiate deliverable stages from the selected lifecycle stage set
+2. instantiate deliverable stages from the lifecycle stage set assigned by the selected deliverable type
 3. instantiate deliverable assignments from the selected deliverable type's role templates
 4. mark the first stage as `in_progress`
 5. write audit entries for the created records
@@ -398,7 +404,7 @@ This is an internal operations tool, so usability and density matter more than p
 Delivera is a secure, relational, project-based application where:
 
 - all business master data is configurable and project-scoped
-- each deliverable belongs to a project, type, phase, WBS item, construction package, and lifecycle stage set
+- each deliverable belongs to a project, type, phase, WBS item, construction package, and a lifecycle stage set derived from its type at creation time
 - no definitions, members, or deliverables are shared across projects
 - lifecycle stage sets define ordered stage templates and never store dates
 - each deliverable owns instantiated stage records with expected dates, actual dates, and explicit status

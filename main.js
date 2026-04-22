@@ -42,6 +42,58 @@ const normalizeValue = (value = "") => value.trim().toLowerCase();
 const pluralize = (count, singular, plural = `${singular}s`) =>
   `${count} ${count === 1 ? singular : plural}`;
 
+const ACTION_ICON_MARKUP = Object.freeze({
+  edit: `
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M10.74 2.26a1.5 1.5 0 1 1 2.12 2.12l-6.9 6.9-2.82.71.7-2.82z"></path>
+      <path d="m9.68 3.32 3 3"></path>
+    </svg>
+  `,
+  delete: `
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2.5 4.5h11"></path>
+      <path d="M6 4.5V3.4c0-.5.4-.9.9-.9h2.2c.5 0 .9.4.9.9v1.1"></path>
+      <path d="m4.9 4.5.6 7.2c0 .7.6 1.3 1.3 1.3h2.4c.7 0 1.3-.6 1.3-1.3l.6-7.2"></path>
+      <path d="M6.9 6.9v3.2"></path>
+      <path d="M9.1 6.9v3.2"></path>
+    </svg>
+  `,
+});
+
+const renderActionIconButton = ({
+  action,
+  icon,
+  label,
+  tone = "default",
+  dataAttributes = {},
+}) => {
+  const classes = ["definition-action", "definition-action-icon"];
+
+  if (tone === "danger") {
+    classes.push("definition-action-danger");
+  }
+
+  const dataAttributeMarkup = Object.entries(dataAttributes)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([key, value]) => `data-${key}="${escapeHtml(String(value))}"`)
+    .join(" ");
+
+  return `
+    <button
+      class="${classes.join(" ")}"
+      type="button"
+      data-action="${escapeHtml(action)}"
+      aria-label="${escapeHtml(label)}"
+      title="${escapeHtml(label)}"
+      ${dataAttributeMarkup}
+    >
+      <span class="definition-action-icon-mark" aria-hidden="true">
+        ${ACTION_ICON_MARKUP[icon] ?? ""}
+      </span>
+    </button>
+  `;
+};
+
 const createProjectFromOption = (option) => ({
   id: option.dataset.projectId,
   name: option.dataset.projectName,
@@ -73,152 +125,6 @@ const createProjectScopedEntity = (projectId, payload) => ({
 const createNamedProjectEntities = (projectId, names) =>
   names.map((name) => createProjectScopedEntity(projectId, { name }));
 
-const createSeedStage = (name) => ({
-  id: crypto.randomUUID(),
-  name,
-});
-
-const createSeedTypeAllocation = (roleId) => ({
-  id: crypto.randomUUID(),
-  roleId,
-});
-
-const DEMO_PROJECT_DEFINITION_SEEDS = Object.freeze({
-  "north-river": {
-    deliverableCount: 100,
-    roles: ["Project engineer", "Lead designer", "Checker", "Document controller"],
-    members: ["Jamie Chen", "Avery Patel", "Morgan Lee"],
-    phases: ["Feasibility", "Detailed engineering", "Construction support"],
-    wbs: [
-      { code: "3100", name: "Structural steel" },
-      { code: "3200", name: "Conveyors" },
-      { code: "3300", name: "Transfer chutes" },
-    ],
-    packages: [
-      { code: "PKG-A1", name: "Crusher gallery" },
-      { code: "PKG-A2", name: "Transfer tower" },
-    ],
-    ruleSets: [
-      {
-        name: "Design review",
-        stages: ["Draft", "Internal review", "Client review", "Approved"],
-      },
-      {
-        name: "Construction release",
-        stages: ["Ready for release", "Issued for construction", "As-built"],
-      },
-    ],
-    types: [
-      { name: "Engineering drawings", roles: ["Lead designer", "Checker"] },
-      { name: "Calculation brief", roles: ["Project engineer", "Checker"] },
-      { name: "Material take-off", roles: ["Project engineer", "Document controller"] },
-    ],
-  },
-  "west-annex": {
-    deliverableCount: 50,
-    roles: ["Project manager", "Structural engineer", "Reviewer", "BIM coordinator"],
-    members: ["Nora Kim", "Diego Alvarez", "Priya Shah"],
-    phases: ["Existing conditions", "Retrofit design", "Tender support"],
-    wbs: [
-      { code: "4100", name: "Existing framing" },
-      { code: "4200", name: "Envelope tie-ins" },
-      { code: "4300", name: "Access platforms" },
-    ],
-    packages: [
-      { code: "PKG-B1", name: "Mezzanine retrofit" },
-      { code: "PKG-B2", name: "Roof strengthening" },
-    ],
-    ruleSets: [
-      {
-        name: "Retrofit workflow",
-        stages: ["Survey", "Basis of design", "Issued for pricing"],
-      },
-      {
-        name: "Field change notice",
-        stages: ["Identified", "Reviewed", "Closed"],
-      },
-    ],
-    types: [
-      { name: "Retrofit drawing", roles: ["Structural engineer", "Reviewer"] },
-      { name: "Site instruction", roles: ["Project manager", "Reviewer"] },
-      { name: "Model update", roles: ["BIM coordinator", "Structural engineer"] },
-    ],
-  },
-  "ore-handling": {
-    deliverableCount: 50,
-    roles: ["Discipline lead", "Mechanical designer", "Approver", "Planner"],
-    members: ["Ethan Brooks", "Mila Novak", "Zoe Campbell"],
-    phases: ["Concept select", "60% design", "Issued for construction"],
-    wbs: [
-      { code: "5100", name: "Transfer conveyors" },
-      { code: "5200", name: "Ore bins" },
-      { code: "5300", name: "Dust collection" },
-    ],
-    packages: [
-      { code: "PKG-C1", name: "Conveyor extension" },
-      { code: "PKG-C2", name: "Bin foundations" },
-    ],
-    ruleSets: [
-      {
-        name: "Expansion package",
-        stages: ["Work in progress", "Internal review", "Issued"],
-      },
-      {
-        name: "Procurement support",
-        stages: ["RFQ support", "Vendor review", "Final tab"],
-      },
-    ],
-    types: [
-      { name: "General arrangement drawing", roles: ["Mechanical designer", "Approver"] },
-      { name: "Equipment datasheet", roles: ["Discipline lead", "Approver"] },
-      { name: "Installation work pack", roles: ["Planner", "Discipline lead"] },
-    ],
-  },
-});
-
-const createSeededProjectState = (project) => {
-  const projectId = project.id;
-  const definitionSeed = DEMO_PROJECT_DEFINITION_SEEDS[projectId];
-
-  if (!definitionSeed) {
-    return createProjectState();
-  }
-
-  const projectState = createProjectState();
-  const roles = createNamedProjectEntities(projectId, definitionSeed.roles);
-  const roleIdsByName = new Map(roles.map((role) => [role.name, role.id]));
-
-  projectState.roles = roles;
-  projectState.members = createNamedProjectEntities(projectId, definitionSeed.members);
-  projectState.phases = createNamedProjectEntities(projectId, definitionSeed.phases);
-  projectState.wbs = definitionSeed.wbs.map((item) => createProjectScopedEntity(projectId, item));
-  projectState.packages = definitionSeed.packages.map((item) =>
-    createProjectScopedEntity(projectId, item),
-  );
-  projectState.ruleSets = definitionSeed.ruleSets.map((ruleSet) =>
-    createProjectScopedEntity(projectId, {
-      name: ruleSet.name,
-      stages: ruleSet.stages.map(createSeedStage),
-    }),
-  );
-  projectState.types = definitionSeed.types.map((deliverableType) =>
-    createProjectScopedEntity(projectId, {
-      name: deliverableType.name,
-      allocations: deliverableType.roles.map((roleName) =>
-        createSeedTypeAllocation(roleIdsByName.get(roleName)),
-      ),
-    }),
-  );
-  projectState.deliverables = createSeedDeliverables({
-    projectId,
-    projectCode: project.code,
-    deliverableCount: definitionSeed.deliverableCount ?? 0,
-    projectState,
-  });
-
-  return projectState;
-};
-
 const normalizeProjectScopedCollection = (projectId, collection = []) => {
   collection.forEach((item) => {
     if (item && typeof item === "object") {
@@ -227,6 +133,103 @@ const normalizeProjectScopedCollection = (projectId, collection = []) => {
   });
 
   return collection;
+};
+
+const APP_STORAGE_KEY = "delivera.app-state.v1";
+
+const normalizePersistedProject = (project) => {
+  if (!project || typeof project !== "object") {
+    return null;
+  }
+
+  const id = typeof project.id === "string" ? project.id.trim() : "";
+  const name = typeof project.name === "string" ? project.name.trim() : "";
+
+  if (!id || !name) {
+    return null;
+  }
+
+  return {
+    id,
+    name,
+    code: typeof project.code === "string" ? project.code : "",
+    defaultPhaseId: typeof project.defaultPhaseId === "string" ? project.defaultPhaseId : "",
+    archived: Boolean(project.archived),
+  };
+};
+
+const normalizePersistedProjectState = (projectId, projectState) => {
+  const normalizedState = createProjectState();
+
+  if (!projectState || typeof projectState !== "object") {
+    return normalizedState;
+  }
+
+  PROJECT_SCOPED_COLLECTION_KEYS.forEach((key) => {
+    normalizedState[key] = normalizeProjectScopedCollection(
+      projectId,
+      Array.isArray(projectState[key]) ? projectState[key] : [],
+    );
+  });
+
+  return normalizedState;
+};
+
+const getPersistedAppState = () => {
+  try {
+    const rawState = window.localStorage.getItem(APP_STORAGE_KEY);
+
+    if (!rawState) {
+      return null;
+    }
+
+    const parsedState = JSON.parse(rawState);
+    const projects = Array.isArray(parsedState?.projects)
+      ? parsedState.projects.map(normalizePersistedProject).filter(Boolean)
+      : [];
+
+    if (!projects.length) {
+      return null;
+    }
+
+    const projectStateStore = Object.fromEntries(
+      projects.map((project) => [
+        project.id,
+        normalizePersistedProjectState(project.id, parsedState?.projectStateStore?.[project.id]),
+      ]),
+    );
+    const currentProjectId =
+      typeof parsedState?.currentProjectId === "string" ? parsedState.currentProjectId : null;
+
+    return {
+      projects,
+      projectStateStore,
+      currentProjectId,
+    };
+  } catch (error) {
+    console.warn("Could not load persisted Delivera state.", error);
+    return null;
+  }
+};
+
+const createInitialAppState = () => {
+  const persistedState = getPersistedAppState();
+
+  if (persistedState) {
+    return persistedState;
+  }
+
+  const projects = [...projectOptionList.querySelectorAll("[data-project-id]")].map((option) =>
+    createProjectFromOption(option),
+  );
+
+  return {
+    projects,
+    projectStateStore: Object.fromEntries(
+      projects.map((project) => [project.id, createProjectState()]),
+    ),
+    currentProjectId: projects[0]?.id ?? null,
+  };
 };
 
 const createEmptyStage = () => ({
@@ -250,198 +253,6 @@ const createDeliverableStageRecord = (stage, index) => ({
 const createDeliverableStagesFromRuleSet = (ruleSet) =>
   ruleSet?.stages?.map((stage, index) => createDeliverableStageRecord(stage, index)) ?? [];
 
-const DEMO_DELIVERABLE_DATE_ANCHOR = new Date(Date.UTC(2026, 0, 6));
-
-const formatDatePart = (value) => String(value).padStart(2, "0");
-
-const formatSeedDate = (date) =>
-  `${date.getUTCFullYear()}-${formatDatePart(date.getUTCMonth() + 1)}-${formatDatePart(date.getUTCDate())}`;
-
-const getSeedDateOffset = (days) => {
-  const nextDate = new Date(DEMO_DELIVERABLE_DATE_ANCHOR);
-  nextDate.setUTCDate(nextDate.getUTCDate() + days);
-  return formatSeedDate(nextDate);
-};
-
-const getDeliverableTypeCode = (typeName = "") => {
-  const tokens = typeName.match(/[A-Za-z0-9]+/g) ?? [];
-  const initials = tokens.map((token) => token[0]).join("").toUpperCase();
-
-  if (initials.length >= 2) {
-    return initials.slice(0, 3);
-  }
-
-  return tokens.join("").slice(0, 3).toUpperCase() || "DLV";
-};
-
-const createSeedDeliverableAssignments = (deliverableType, members, roleById, deliverableIndex) =>
-  (deliverableType.allocations ?? [])
-    .map((allocation, index) => {
-      const role = roleById.get(allocation.roleId);
-      const member = members[(deliverableIndex + index) % members.length];
-
-      if (!role || !member) {
-        return null;
-      }
-
-      return {
-        id: crypto.randomUUID(),
-        roleId: role.id,
-        roleName: role.name,
-        memberId: member.id,
-        memberName: member.name,
-        order: index,
-      };
-    })
-    .filter(Boolean);
-
-const createSeedDeliverableStages = (ruleSet, deliverableIndex) => {
-  const stages = createDeliverableStagesFromRuleSet(ruleSet);
-
-  if (!stages.length) {
-    return stages;
-  }
-
-  const baseOffset = deliverableIndex * 3;
-  const pattern = deliverableIndex % 6;
-  const skippedOrders = new Set();
-  let completedCount = 0;
-  let currentOrder = 0;
-  let currentStatus = "active";
-
-  switch (pattern) {
-    case 1:
-      completedCount = Math.min(1, stages.length - 1);
-      currentOrder = Math.min(completedCount, stages.length - 1);
-      break;
-    case 2:
-      completedCount = Math.min(2, stages.length - 1);
-      currentOrder = Math.min(completedCount, stages.length - 1);
-      break;
-    case 3:
-      completedCount = stages.length;
-      currentOrder = -1;
-      break;
-    case 4:
-      completedCount = Math.min(Math.max(stages.length - 2, 0), stages.length - 1);
-      currentOrder = Math.min(completedCount, stages.length - 1);
-      currentStatus = "blocked";
-      break;
-    case 5:
-      if (stages.length >= 3) {
-        completedCount = 1;
-        skippedOrders.add(1);
-        currentOrder = 2;
-      } else {
-        currentOrder = Math.min(1, stages.length - 1);
-        currentStatus = "blocked";
-      }
-      break;
-    default:
-      completedCount = 0;
-      currentOrder = 0;
-      break;
-  }
-
-  const setCompletedStage = (stage, order) => {
-    const expectedOffset = baseOffset + order * 7;
-
-    stage.status = "completed";
-    stage.expectedDate = getSeedDateOffset(expectedOffset);
-    stage.completedDate = getSeedDateOffset(expectedOffset + ((deliverableIndex + order) % 3));
-  };
-
-  const setInFlightStage = (stage, order, status) => {
-    stage.status = status;
-    stage.expectedDate = getSeedDateOffset(baseOffset + order * 7 + 3);
-    stage.completedDate = null;
-  };
-
-  const setPendingStage = (stage, order) => {
-    stage.status = "pending";
-    stage.expectedDate = getSeedDateOffset(baseOffset + order * 7 + 7);
-    stage.completedDate = null;
-  };
-
-  const setSkippedStage = (stage, order) => {
-    stage.status = "skipped";
-    stage.expectedDate = getSeedDateOffset(baseOffset + order * 7 + 2);
-    stage.completedDate = null;
-  };
-
-  stages.forEach((stage, order) => {
-    if (completedCount === stages.length || order < completedCount) {
-      setCompletedStage(stage, order);
-      return;
-    }
-
-    if (skippedOrders.has(order)) {
-      setSkippedStage(stage, order);
-      return;
-    }
-
-    if (order === currentOrder) {
-      setInFlightStage(stage, order, currentStatus);
-      return;
-    }
-
-    setPendingStage(stage, order);
-  });
-
-  return stages;
-};
-
-const createSeedDeliverables = ({
-  projectId,
-  projectCode,
-  deliverableCount,
-  projectState,
-}) => {
-  const { members, packages, phases, roles, ruleSets, types, wbs } = projectState;
-
-  if (
-    !deliverableCount ||
-    !members.length ||
-    !phases.length ||
-    !roles.length ||
-    !ruleSets.length ||
-    !types.length ||
-    !wbs.length
-  ) {
-    return [];
-  }
-
-  const roleById = new Map(roles.map((role) => [role.id, role]));
-
-  return Array.from({ length: deliverableCount }, (_, index) => {
-    const deliverableType = types[index % types.length];
-    const ruleSet = ruleSets[(index + Math.floor(index / types.length)) % ruleSets.length];
-    const phase = phases[(index + Math.floor(index / ruleSets.length)) % phases.length];
-    const wbsItem = wbs[(index + Math.floor(index / phases.length)) % wbs.length];
-    const packageItem =
-      packages.length && index % 4 !== 0
-        ? packages[(index + Math.floor(index / 5)) % packages.length]
-        : null;
-    const codePrefix = getDeliverableTypeCode(deliverableType.name);
-
-    return createProjectScopedEntity(projectId, {
-      code: `${projectCode}-${codePrefix}-${String(index + 1).padStart(3, "0")}`,
-      typeId: deliverableType.id,
-      ruleSetId: ruleSet.id,
-      phaseId: phase.id,
-      wbsId: wbsItem.id,
-      packageId: packageItem?.id ?? null,
-      stages: createSeedDeliverableStages(ruleSet, index),
-      assignments: createSeedDeliverableAssignments(
-        deliverableType,
-        members,
-        roleById,
-        index,
-      ),
-    });
-  });
-};
-
 const createDeliverablesTableFilters = (project = null) => ({
   code: "",
   typeId: "",
@@ -458,13 +269,11 @@ const createDeliverablesTableState = (project = null) => ({
   filters: createDeliverablesTableFilters(project),
 });
 
-let projects = [...projectOptionList.querySelectorAll("[data-project-id]")].map((option) =>
-  createProjectFromOption(option),
-);
+const initialAppState = createInitialAppState();
 
-const projectStateStore = Object.fromEntries(
-  projects.map((project) => [project.id, createSeededProjectState(project)]),
-);
+let projects = initialAppState.projects;
+
+const projectStateStore = initialAppState.projectStateStore;
 
 const definitionConfigs = {
   types: {
@@ -711,7 +520,7 @@ const definitionConfigs = {
       {
         key: "name",
         label: "Member name",
-        placeholder: "Jamie Chen",
+        placeholder: "Member name",
         required: true,
       },
     ],
@@ -737,7 +546,10 @@ const definitionConfigs = {
   },
 };
 
-let currentProject = projects[0];
+let currentProject =
+  projects.find((project) => project.id === initialAppState.currentProjectId) ??
+  projects[0] ??
+  null;
 let currentView = "deliverables";
 let projectEditorProjectId = null;
 let pendingConfirmationAction = null;
@@ -754,6 +566,10 @@ let editingRuleSetId = null;
 let selectedDeliverableId = null;
 
 const getProjectState = (projectId) => {
+  if (!projectId) {
+    return createProjectState();
+  }
+
   if (!projectStateStore[projectId]) {
     projectStateStore[projectId] = createProjectState();
   }
@@ -767,6 +583,23 @@ const getProjectState = (projectId) => {
   return projectState;
 };
 
+const persistAppState = () => {
+  try {
+    window.localStorage.setItem(
+      APP_STORAGE_KEY,
+      JSON.stringify({
+        projects,
+        projectStateStore: Object.fromEntries(
+          projects.map((project) => [project.id, getProjectState(project.id)]),
+        ),
+        currentProjectId: currentProject?.id ?? null,
+      }),
+    );
+  } catch (error) {
+    console.warn("Could not persist Delivera state.", error);
+  }
+};
+
 const getDefinitionItems = (view, projectId) => getProjectState(projectId)[view];
 
 const getRuleSets = (projectId) => getProjectState(projectId).ruleSets;
@@ -776,7 +609,7 @@ const getDeliverables = (projectId) => getProjectState(projectId).deliverables;
 const getDeliverableById = (projectId, deliverableId) =>
   getDeliverables(projectId).find((deliverable) => deliverable.id === deliverableId) ?? null;
 
-const getSelectedDeliverable = (projectId = currentProject.id) =>
+const getSelectedDeliverable = (projectId = currentProject?.id ?? "") =>
   selectedDeliverableId ? getDeliverableById(projectId, selectedDeliverableId) : null;
 
 const getRoles = (projectId) => getProjectState(projectId).roles;
@@ -851,6 +684,11 @@ const getDeliverableTypesUsingRole = (projectId, roleId) =>
     (deliverableType.allocations ?? []).some((allocation) => allocation.roleId === roleId),
   );
 
+const getDeliverableTypesUsingRuleSet = (projectId, ruleSetId) =>
+  getDefinitionItems("types", projectId).filter(
+    (deliverableType) => (deliverableType.ruleSetId ?? "") === ruleSetId,
+  );
+
 const getDeliverableStages = (deliverable, projectId) => {
   if (!Array.isArray(deliverable.stages)) {
     deliverable.stages = createDeliverableStagesFromRuleSet(findRuleSet(projectId, deliverable.ruleSetId));
@@ -890,6 +728,11 @@ const getDeliverableTypeAssignmentTemplates = (projectId, typeId) => {
     })
     .filter(Boolean);
 };
+
+const getDeliverableTypeRuleSetId = (deliverableType) => deliverableType?.ruleSetId ?? "";
+
+const getDeliverableTypeRuleSet = (projectId, deliverableType) =>
+  findRuleSet(projectId, getDeliverableTypeRuleSetId(deliverableType));
 
 const hasDuplicateDefinitionField = (view, projectId, field, value, excludingId = null) =>
   getDefinitionItems(view, projectId).some(
@@ -978,6 +821,11 @@ const closeDeliverableModal = ({ restoreFocus = true } = {}) => {
 };
 
 const openDeliverableModal = () => {
+  if (!currentProject) {
+    openProjectEditor();
+    return;
+  }
+
   if (showMissingDeliverableRequirementsFeedback(currentProject.id)) {
     return;
   }
@@ -1175,11 +1023,19 @@ const requestRuleSetDeletion = (ruleSetId) => {
   }
 
   const dependentDeliverables = getDeliverablesUsingRuleSet(currentProject.id, ruleSetId);
+  const dependentDeliverableTypes = getDeliverableTypesUsingRuleSet(currentProject.id, ruleSetId);
 
-  if (dependentDeliverables.length) {
+  if (dependentDeliverables.length || dependentDeliverableTypes.length) {
+    const dependencies = [
+      dependentDeliverableTypes.length
+        ? pluralize(dependentDeliverableTypes.length, "deliverable type")
+        : "",
+      dependentDeliverables.length ? pluralize(dependentDeliverables.length, "deliverable") : "",
+    ].filter(Boolean);
+
     openConfirmationModal({
       title: "Cannot delete lifecycle stage set",
-      message: `Remove or update ${pluralize(dependentDeliverables.length, "deliverable")} before deleting this lifecycle stage set from ${currentProject.name}.`,
+      message: `Remove or update ${formatLabelList(dependencies)} before deleting this lifecycle stage set from ${currentProject.name}.`,
       subject: ruleSet.name,
       confirmLabel: "Close",
       confirmVariant: "primary",
@@ -1227,7 +1083,7 @@ const requestDeliverableDeletion = (deliverableId) => {
 const deleteProject = (projectId) => {
   projects = projects.filter((entry) => entry.id !== projectId);
   delete projectStateStore[projectId];
-  currentProject = projects[0];
+  currentProject = projects[0] ?? null;
   resetDeliverablesTableState();
   currentView = "deliverables";
   closeProjectEditor();
@@ -1267,8 +1123,8 @@ const showFieldError = (field, message) => {
 };
 
 const getProjectMetaLabel = (project) => {
-  const codeLabel = project.code || "No code";
-  return project.archived ? `${codeLabel} · Archived` : codeLabel;
+  const codeLabel = project?.code || "No code";
+  return project?.archived ? `${codeLabel} · Archived` : codeLabel;
 };
 
 const getProjectInitials = (project) => {
@@ -1293,7 +1149,7 @@ const renderProjectOptions = () => {
     .map(
       (project) => `
         <button
-          class="project-option${project.id === currentProject.id ? " is-selected" : ""}"
+          class="project-option${project.id === currentProject?.id ? " is-selected" : ""}"
           type="button"
           data-project-id="${escapeHtml(project.id)}"
           data-project-name="${escapeHtml(project.name)}"
@@ -1308,6 +1164,25 @@ const renderProjectOptions = () => {
     )
     .join("");
 };
+
+const renderNoProjectsBody = () => `
+  <section class="definition-stack">
+    <section class="definition-list-shell">
+      <div class="definition-list-head">
+        <p class="definition-list-title">No projects</p>
+        <span class="definition-list-count">0</span>
+      </div>
+      <div class="definition-empty">
+        Create a project to start adding deliverables, lifecycle stages, and project definitions.
+      </div>
+      <div class="type-form-actions">
+        <button class="primary-button" type="button" data-action="open-project-editor-empty">
+          Create project
+        </button>
+      </div>
+    </section>
+  </section>
+`;
 
 const getDefinitionFieldOptions = (field, projectId) => {
   if (typeof field.options === "function") {
@@ -1402,7 +1277,7 @@ const renderDefinitionField = (field, value = "", { projectId } = {}) => {
   `;
 };
 
-const renderDefinitionForm = (view, item = null, projectId = currentProject.id) => {
+const renderDefinitionForm = (view, item = null, projectId = currentProject?.id ?? "") => {
   const config = definitionConfigs[view];
   const values = item ?? {};
   const isEditing = Boolean(item);
@@ -1438,7 +1313,7 @@ const renderDefinitionForm = (view, item = null, projectId = currentProject.id) 
   `;
 };
 
-const renderDefinitionInlineEditForm = (view, item, index, projectId = currentProject.id) => {
+const renderDefinitionInlineEditForm = (view, item, index, projectId = currentProject?.id ?? "") => {
   const config = definitionConfigs[view];
   const gridClass = config.fields.length === 1 ? " definition-inline-grid-single" : "";
 
@@ -1490,24 +1365,25 @@ const renderDefinitionBody = (view, project) => {
                       ${config.renderSummary(item, { projectId: project.id })}
                     </div>
                     <div class="definition-actions">
-                      <button
-                        class="definition-action"
-                        type="button"
-                        data-action="edit-definition"
-                        data-definition-view="${view}"
-                        data-item-id="${item.id}"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        class="definition-action definition-action-danger"
-                        type="button"
-                        data-action="delete-definition"
-                        data-definition-view="${view}"
-                        data-item-id="${item.id}"
-                      >
-                        Delete
-                      </button>
+                      ${renderActionIconButton({
+                        action: "edit-definition",
+                        icon: "edit",
+                        label: `Edit ${config.singular}`,
+                        dataAttributes: {
+                          "definition-view": view,
+                          "item-id": item.id,
+                        },
+                      })}
+                      ${renderActionIconButton({
+                        action: "delete-definition",
+                        icon: "delete",
+                        label: `Delete ${config.singular}`,
+                        tone: "danger",
+                        dataAttributes: {
+                          "definition-view": view,
+                          "item-id": item.id,
+                        },
+                      })}
                     </div>
                   </li>
                 `,
@@ -1584,6 +1460,23 @@ const renderDeliverableTypeForm = ({ formId, projectId, deliverableType = null }
         />
       </label>
 
+      <label class="field">
+        <span>Lifecycle stages</span>
+        <select
+          data-deliverable-type-rule-set
+          ${getRuleSets(projectId).length ? "" : "disabled"}
+          required
+        >
+          ${renderSelectOptions(
+            getRuleSetOptions(projectId),
+            getDeliverableTypeRuleSetId(deliverableType),
+            getRuleSets(projectId).length
+              ? "Select a lifecycle stage set"
+              : "Add a lifecycle stage set first",
+          )}
+        </select>
+      </label>
+
       <div class="type-allocation-group">
         <div class="type-allocation-group-head">
           <p class="definition-list-title">Roles Per Deliverable Type</p>
@@ -1638,32 +1531,36 @@ const renderDeliverableTypeCard = (deliverableType, projectId) => {
   }
 
   const allocations = getDeliverableTypeAllocations(deliverableType);
+  const ruleSet = getDeliverableTypeRuleSet(projectId, deliverableType);
 
   return `
     <article class="type-card">
       <div class="type-card-head">
         <div class="type-card-copy">
           <h3 class="type-card-title">${escapeHtml(deliverableType.name)}</h3>
-          <p class="type-card-meta">${pluralize(allocations.length, "role")}</p>
+          <p class="type-card-meta">
+            ${pluralize(allocations.length, "role")} · ${escapeHtml(ruleSet?.name ?? "No lifecycle set")}
+          </p>
         </div>
         <div class="type-card-actions">
           <div class="definition-actions">
-            <button
-              class="definition-action"
-              type="button"
-              data-action="edit-deliverable-type"
-              data-deliverable-type-id="${deliverableType.id}"
-            >
-              Edit
-            </button>
-            <button
-              class="definition-action definition-action-danger"
-              type="button"
-              data-action="delete-deliverable-type"
-              data-deliverable-type-id="${deliverableType.id}"
-            >
-              Delete
-            </button>
+            ${renderActionIconButton({
+              action: "edit-deliverable-type",
+              icon: "edit",
+              label: `Edit ${deliverableType.name}`,
+              dataAttributes: {
+                "deliverable-type-id": deliverableType.id,
+              },
+            })}
+            ${renderActionIconButton({
+              action: "delete-deliverable-type",
+              icon: "delete",
+              label: `Delete ${deliverableType.name}`,
+              tone: "danger",
+              dataAttributes: {
+                "deliverable-type-id": deliverableType.id,
+              },
+            })}
           </div>
         </div>
       </div>
@@ -1767,7 +1664,7 @@ const renderRuleSetForm = ({ formId, ruleSet = null }) => {
           type="text"
           data-ruleset-name
           value="${escapeHtml(ruleSet?.name ?? "")}"
-          placeholder="IFR package"
+          placeholder="Design review workflow"
           autocomplete="off"
           required
         />
@@ -1829,22 +1726,23 @@ const renderRuleSetCard = (ruleSet) => {
         </div>
         <div class="ruleset-card-actions">
           <div class="definition-actions">
-            <button
-              class="definition-action"
-              type="button"
-              data-action="edit-rule-set"
-              data-rule-set-id="${ruleSet.id}"
-            >
-              Edit
-            </button>
-            <button
-              class="definition-action definition-action-danger"
-              type="button"
-              data-action="delete-rule-set"
-              data-rule-set-id="${ruleSet.id}"
-            >
-              Delete
-            </button>
+            ${renderActionIconButton({
+              action: "edit-rule-set",
+              icon: "edit",
+              label: `Edit ${ruleSet.name}`,
+              dataAttributes: {
+                "rule-set-id": ruleSet.id,
+              },
+            })}
+            ${renderActionIconButton({
+              action: "delete-rule-set",
+              icon: "delete",
+              label: `Delete ${ruleSet.name}`,
+              tone: "danger",
+              dataAttributes: {
+                "rule-set-id": ruleSet.id,
+              },
+            })}
           </div>
         </div>
       </div>
@@ -2729,16 +2627,6 @@ const renderDeliverableForm = (project) => `
         disabled: !getDefinitionItems("types", project.id).length,
       })}
       ${renderDeliverableSelectField({
-        key: "ruleSetId",
-        label: "Lifecycle Stages",
-        options: getRuleSetOptions(project.id),
-        placeholderLabel: getRuleSets(project.id).length
-          ? "Select a lifecycle stage set"
-          : "Add a lifecycle stage set first",
-        required: true,
-        disabled: !getRuleSets(project.id).length,
-      })}
-      ${renderDeliverableSelectField({
         key: "phaseId",
         label: "Phase",
         options: getDefinitionOptions("phases", project.id),
@@ -2979,7 +2867,7 @@ const renderProjectEditorBody = () => {
         <input
           type="text"
           data-project-field="name"
-          placeholder="North River Upgrade"
+          placeholder="Project name"
           autocomplete="off"
           required
           value="${escapeHtml(project?.name ?? "")}"
@@ -2990,7 +2878,7 @@ const renderProjectEditorBody = () => {
         <input
           type="text"
           data-project-field="code"
-          placeholder="NRU-01"
+          placeholder="PRJ-001"
           autocomplete="off"
           value="${escapeHtml(project?.code ?? "")}"
         />
@@ -3108,15 +2996,17 @@ const validateDefinitionForm = (form, view, projectId, excludingId = null) => {
 
 const collectDeliverableTypeFormData = (form) => {
   const name = form.querySelector("[data-deliverable-type-name]")?.value.trim() ?? "";
+  const ruleSetId = form.querySelector("[data-deliverable-type-rule-set]")?.value.trim() ?? "";
   const allocations = [...form.querySelectorAll("[data-type-allocation-row]")].map((row) => ({
     roleId: row.querySelector("[data-type-allocation-role]")?.value.trim() ?? "",
   }));
 
-  return { name, allocations };
+  return { name, ruleSetId, allocations };
 };
 
 const validateDeliverableTypeForm = (form, projectId, excludingId = null) => {
   const nameInput = form.querySelector("[data-deliverable-type-name]");
+  const ruleSetSelect = form.querySelector("[data-deliverable-type-rule-set]");
   const allocationRows = [...form.querySelectorAll("[data-type-allocation-row]")];
   const payload = collectDeliverableTypeFormData(form);
   const seenRoles = new Set();
@@ -3139,6 +3029,27 @@ const validateDeliverableTypeForm = (form, projectId, excludingId = null) => {
     return {
       field: nameInput,
       message: "Add at least one role before creating deliverable types.",
+    };
+  }
+
+  if (!getRuleSets(projectId).length) {
+    return {
+      field: ruleSetSelect ?? nameInput,
+      message: "Add at least one lifecycle stage set before creating deliverable types.",
+    };
+  }
+
+  if (!payload.ruleSetId) {
+    return {
+      field: ruleSetSelect,
+      message: "Lifecycle stage set is required.",
+    };
+  }
+
+  if (!findRuleSet(projectId, payload.ruleSetId)) {
+    return {
+      field: ruleSetSelect,
+      message: "Choose a valid lifecycle stage set.",
     };
   }
 
@@ -3186,6 +3097,7 @@ const validateDeliverableTypeForm = (form, projectId, excludingId = null) => {
   return {
     payload: {
       name: payload.name,
+      ruleSetId: payload.ruleSetId,
       allocations,
     },
   };
@@ -3325,6 +3237,19 @@ const renderView = () => {
     document.body.classList.remove("has-drawer-open");
   }
 
+  if (!currentProject && currentView !== "project-editor") {
+    workspaceEyebrow.textContent = "Projects";
+    workspaceTitle.textContent = "No projects yet";
+    workspaceCopy.textContent = "Create a project to initialize the workspace.";
+    workspaceCopy.hidden = false;
+    workspacePanel.classList.toggle("workspace-panel-wide", false);
+    workspaceBody.innerHTML = renderNoProjectsBody();
+    workspaceBody.hidden = false;
+    persistAppState();
+    bindViewInteractions();
+    return;
+  }
+
   const config = viewMeta[currentView];
   const eyebrow =
     typeof config.eyebrow === "function" ? config.eyebrow(currentProject) : config.eyebrow;
@@ -3340,6 +3265,7 @@ const renderView = () => {
   workspacePanel.classList.toggle("workspace-panel-wide", currentView === "deliverables");
   workspaceBody.innerHTML = body;
   workspaceBody.hidden = !body;
+  persistAppState();
   bindViewInteractions();
 };
 
@@ -3404,6 +3330,23 @@ const openProjectDropdown = () => {
 };
 
 const syncProjectSelection = () => {
+  if (!currentProject) {
+    if (activeProjectMark) {
+      activeProjectMark.textContent = "PR";
+    }
+
+    activeProjectName.textContent = "No projects";
+    activeProjectCode.textContent = "Create a project";
+    projectTrigger.title = "No projects";
+    editProjectOption.disabled = true;
+
+    [...projectOptionList.querySelectorAll("[data-project-id]")].forEach((option) => {
+      option.classList.remove("is-selected");
+    });
+
+    return;
+  }
+
   if (activeProjectMark) {
     activeProjectMark.textContent = getProjectInitials(currentProject);
   }
@@ -3411,6 +3354,7 @@ const syncProjectSelection = () => {
   activeProjectName.textContent = currentProject.name;
   activeProjectCode.textContent = getProjectMetaLabel(currentProject);
   projectTrigger.title = currentProject.name;
+  editProjectOption.disabled = false;
 
   [...projectOptionList.querySelectorAll("[data-project-id]")].forEach((option) => {
     option.classList.toggle("is-selected", option.dataset.projectId === currentProject.id);
@@ -3621,6 +3565,7 @@ const bindDeliverableTypesView = () => {
         }
 
         deliverableType.name = validation.payload.name;
+        deliverableType.ruleSetId = validation.payload.ruleSetId;
         deliverableType.allocations = validation.payload.allocations;
         editingDeliverableTypeId = null;
       } else {
@@ -3803,7 +3748,6 @@ const bindRuleSetView = () => {
 const collectDeliverableFormData = (form) => ({
   code: form.querySelector('[data-deliverable-field="code"]')?.value.trim() ?? "",
   typeId: form.querySelector('[data-deliverable-field="typeId"]')?.value.trim() ?? "",
-  ruleSetId: form.querySelector('[data-deliverable-field="ruleSetId"]')?.value.trim() ?? "",
   phaseId: form.querySelector('[data-deliverable-field="phaseId"]')?.value.trim() ?? "",
   wbsId: form.querySelector('[data-deliverable-field="wbsId"]')?.value.trim() ?? "",
   packageId: form.querySelector('[data-deliverable-field="packageId"]')?.value.trim() ?? "",
@@ -3826,12 +3770,10 @@ const collectDeliverableStageFormData = (form) =>
       row.querySelector('[data-deliverable-stage-field="completedDate"]')?.value.trim() ?? "",
   }));
 
-const validateDeliverableStageForm = (form, deliverable, projectId) => {
+const validateDeliverableStageForm = (form, deliverable, projectId, ruleSetId = "") => {
   if (!deliverable) {
     return {
-      stages: createDeliverableStagesFromRuleSet(
-        findRuleSet(projectId, form.querySelector('[data-deliverable-field="ruleSetId"]')?.value.trim() ?? ""),
-      ),
+      stages: createDeliverableStagesFromRuleSet(findRuleSet(projectId, ruleSetId)),
     };
   }
 
@@ -3925,13 +3867,8 @@ const validateDeliverableForm = (
   { excludingId = null, existingDeliverable = null } = {},
 ) => {
   const values = collectDeliverableFormData(form);
-  const stageValidation = validateDeliverableStageForm(form, existingDeliverable, projectId);
   const { missingRequirements, message: missingRequirementsMessage } =
     getMissingDeliverableRequirementsSummary(projectId);
-
-  if (!("stages" in stageValidation)) {
-    return stageValidation;
-  }
 
   if (!values.code) {
     return {
@@ -3967,6 +3904,10 @@ const validateDeliverableForm = (
     };
   }
 
+  const deliverableType = findDefinitionItem("types", projectId, values.typeId);
+  const ruleSetId = existingDeliverable?.ruleSetId ?? getDeliverableTypeRuleSetId(deliverableType);
+  const ruleSet = findRuleSet(projectId, ruleSetId);
+
   if (!getMembers(projectId).length) {
     return {
       field: "typeId",
@@ -3974,10 +3915,10 @@ const validateDeliverableForm = (
     };
   }
 
-  if (!findRuleSet(projectId, values.ruleSetId)) {
+  if (!ruleSet) {
     return {
-      field: "ruleSetId",
-      message: "Choose a valid lifecycle stage set.",
+      field: "typeId",
+      message: "The selected deliverable type does not have a valid lifecycle stage set.",
     };
   }
 
@@ -4002,9 +3943,19 @@ const validateDeliverableForm = (
     };
   }
 
+  const stageValidation = validateDeliverableStageForm(
+    form,
+    existingDeliverable,
+    projectId,
+    ruleSetId,
+  );
+
+  if (!("stages" in stageValidation)) {
+    return stageValidation;
+  }
+
   const requiredAssignments = getDeliverableTypeAssignmentTemplates(projectId, values.typeId);
   const assignmentRows = [...form.querySelectorAll("[data-deliverable-assignment-row]")];
-  const deliverableType = findDefinitionItem("types", projectId, values.typeId);
 
   if (
     getDeliverableTypeAllocations(deliverableType).length !== requiredAssignments.length ||
@@ -4067,11 +4018,11 @@ const validateDeliverableForm = (
     payload: {
       code: values.code,
       typeId: values.typeId,
-      ruleSetId: values.ruleSetId,
+      ruleSetId,
       stages:
-        existingDeliverable && existingDeliverable.ruleSetId === values.ruleSetId
+        existingDeliverable && existingDeliverable.ruleSetId === ruleSetId
           ? stageValidation.stages
-          : createDeliverableStagesFromRuleSet(findRuleSet(projectId, values.ruleSetId)),
+          : createDeliverableStagesFromRuleSet(ruleSet),
       phaseId: values.phaseId,
       wbsId: values.wbsId,
       packageId: values.packageId || null,
@@ -4328,7 +4279,7 @@ const closeDeliverableEditor = () => {
 
 const bindDeliverableForm = (
   form,
-  { projectId = currentProject.id, deliverable = null, onSuccess = null } = {},
+  { projectId = currentProject?.id ?? "", deliverable = null, onSuccess = null } = {},
 ) => {
   if (!form) {
     return;
@@ -4356,7 +4307,7 @@ const bindDeliverableForm = (
     }
 
     if (event.target === typeSelect) {
-      syncDeliverableAssignmentSection(form, currentProject.id, {
+      syncDeliverableAssignmentSection(form, projectId, {
         focusFirstAssignment: true,
       });
       return;
@@ -4565,6 +4516,15 @@ const bindProjectEditorView = () => {
 };
 
 const bindViewInteractions = () => {
+  if (!currentProject && currentView !== "project-editor") {
+    workspaceBody
+      .querySelector('[data-action="open-project-editor-empty"]')
+      ?.addEventListener("click", () => {
+        openProjectEditor();
+      });
+    return;
+  }
+
   if (currentView === "deliverables") {
     bindDeliverablesView();
     return;
@@ -4646,6 +4606,10 @@ projectOptionList.addEventListener("click", (event) => {
 });
 
 editProjectOption.addEventListener("click", () => {
+  if (!currentProject) {
+    return;
+  }
+
   openProjectEditor(currentProject.id);
 });
 
@@ -4698,7 +4662,7 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (event.key === "Escape" && getSelectedDeliverable(currentProject.id)) {
+  if (event.key === "Escape" && currentProject && getSelectedDeliverable(currentProject.id)) {
     event.preventDefault();
     closeDeliverableEditor();
     return;

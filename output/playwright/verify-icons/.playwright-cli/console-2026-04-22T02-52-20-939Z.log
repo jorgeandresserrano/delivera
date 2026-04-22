@@ -1,0 +1,6 @@
+[      57ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://127.0.0.1:4173/favicon.ico:0
+[   36086ms] ReferenceError: Cannot access 'findDefinitionItem' before initialization
+    at getProjectDefaultPhaseId (http://127.0.0.1:4173/main.js?v=20260421-1:631:37)
+    at createDeliverablesTableFilters (http://127.0.0.1:4173/main.js?v=20260421-1:261:12)
+    at createDeliverablesTableState (http://127.0.0.1:4173/main.js?v=20260421-1:269:12)
+    at http://127.0.0.1:4173/main.js?v=20260421-1:559:30

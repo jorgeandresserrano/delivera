@@ -1,0 +1,70 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: D
+      - generic [ref=e6]:
+        - paragraph [ref=e7]: Internal tool
+        - heading "Delivera" [level=1] [ref=e8]
+      - button "Collapse left menu" [expanded] [ref=e9] [cursor=pointer]:
+        - generic [ref=e10]: ‹
+    - generic [ref=e11]:
+      - paragraph [ref=e12]: Project
+      - button "Select project" [ref=e13] [cursor=pointer]:
+        - generic [ref=e14]: PR
+        - generic [ref=e15]:
+          - strong [ref=e16]: No projects
+          - generic [ref=e17]: Create a project
+        - generic [ref=e18]: ▾
+    - generic [ref=e19]:
+      - paragraph [ref=e20]: Main
+      - button "Deliverables" [ref=e21] [cursor=pointer]:
+        - img [ref=e23]
+        - generic [ref=e28]: Deliverables
+    - generic [ref=e29]:
+      - paragraph [ref=e30]: Definitions
+      - button "Deliverable Types" [ref=e31] [cursor=pointer]:
+        - img [ref=e33]
+        - generic [ref=e34]: Deliverable Types
+      - button "Lifecycle Stages" [ref=e35] [cursor=pointer]:
+        - img [ref=e37]
+        - generic [ref=e43]: Lifecycle Stages
+      - button "Phases" [ref=e44] [cursor=pointer]:
+        - img [ref=e46]
+        - generic [ref=e48]: Phases
+      - button "WBS" [ref=e49] [cursor=pointer]:
+        - img [ref=e51]
+        - generic [ref=e55]: WBS
+      - button "Packages" [ref=e56] [cursor=pointer]:
+        - img [ref=e58]
+        - generic [ref=e62]: Packages
+      - button "Roles" [ref=e63] [cursor=pointer]:
+        - img [ref=e65]
+        - generic [ref=e68]: Roles
+      - button "Members" [ref=e69] [cursor=pointer]:
+        - img [ref=e71]
+        - generic [ref=e76]: Members
+  - main [ref=e77]:
+    - generic [ref=e78]:
+      - paragraph [ref=e79]: Projects
+      - heading "New project" [level=2] [ref=e91]
+      - paragraph [ref=e81]: Create a project record first, then define its phases, WBS items, packages, roles, members, deliverable types, and lifecycle stages. Set the default phase once phases exist.
+      - generic [ref=e92]:
+        - generic [ref=e93]:
+          - generic [ref=e94]:
+            - generic [ref=e95]: Project name
+            - textbox "Project name" [active] [ref=e96]
+          - generic [ref=e97]:
+            - generic [ref=e98]: Project code
+            - textbox "Project code" [ref=e99]:
+              - /placeholder: PRJ-001
+        - generic [ref=e100]:
+          - generic [ref=e101]:
+            - generic [ref=e102]: Status
+            - combobox "Status" [ref=e103]:
+              - option "Active" [selected]
+              - option "Archived"
+          - generic [ref=e104]:
+            - generic [ref=e105]: Default phase
+            - combobox "Default phase" [disabled] [ref=e106]:
+              - option "Create the project first" [selected]
+        - button "Create project" [ref=e108] [cursor=pointer]
