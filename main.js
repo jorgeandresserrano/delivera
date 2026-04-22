@@ -689,10 +689,18 @@ const getDeliverableTypesUsingRuleSet = (projectId, ruleSetId) =>
     (deliverableType) => (deliverableType.ruleSetId ?? "") === ruleSetId,
   );
 
+const normalizeDeliverableStageStatus = (status = "pending") =>
+  status === "blocked" ? "active" : status;
+
 const getDeliverableStages = (deliverable, projectId) => {
   if (!Array.isArray(deliverable.stages)) {
     deliverable.stages = createDeliverableStagesFromRuleSet(findRuleSet(projectId, deliverable.ruleSetId));
   }
+
+  deliverable.stages.forEach((stage, index) => {
+    stage.order = stage.order ?? index;
+    stage.status = normalizeDeliverableStageStatus(stage.status);
+  });
 
   return deliverable.stages;
 };
@@ -1848,14 +1856,13 @@ const renderRulesOfCreditBody = (project) => {
 
 const getStageStatusLabel = (status = "pending") => {
   const labels = {
-    active: "Active",
-    pending: "Pending",
+    active: "In progress",
+    pending: "Not started",
     completed: "Done",
-    blocked: "Blocked",
     skipped: "Skipped",
   };
 
-  return labels[status] ?? "Pending";
+  return labels[normalizeDeliverableStageStatus(status)] ?? "Not started";
 };
 
 const getStageStatusTone = (status = "pending") => {
@@ -1863,14 +1870,13 @@ const getStageStatusTone = (status = "pending") => {
     active: "active",
     pending: "pending",
     completed: "completed",
-    blocked: "blocked",
     skipped: "skipped",
   };
 
-  return tones[status] ?? "pending";
+  return tones[normalizeDeliverableStageStatus(status)] ?? "pending";
 };
 
-const DELIVERABLE_STAGE_STATUS_OPTIONS = ["pending", "active", "blocked", "completed", "skipped"].map(
+const DELIVERABLE_STAGE_STATUS_OPTIONS = ["pending", "active", "completed", "skipped"].map(
   (status) => ({
     value: status,
     label: getStageStatusLabel(status),
@@ -1878,7 +1884,9 @@ const DELIVERABLE_STAGE_STATUS_OPTIONS = ["pending", "active", "blocked", "compl
 );
 
 const isValidDeliverableStageStatus = (status) =>
-  DELIVERABLE_STAGE_STATUS_OPTIONS.some((option) => option.value === status);
+  DELIVERABLE_STAGE_STATUS_OPTIONS.some(
+    (option) => option.value === normalizeDeliverableStageStatus(status),
+  );
 
 const isValidStageDateInput = (value = "") => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
 
@@ -1923,7 +1931,7 @@ const getDeliverableCurrentStage = (deliverable, projectId) => {
   const stages = getDeliverableStages(deliverable, projectId);
 
   return (
-    stages.find((stage) => stage.status === "active" || stage.status === "blocked") ??
+    stages.find((stage) => stage.status === "active") ??
     stages.find((stage) => stage.status === "pending") ??
     stages.at(-1) ??
     null
@@ -3794,6 +3802,7 @@ const validateDeliverableStageForm = (form, deliverable, projectId, ruleSetId = 
     const statusField = stageRow.row.querySelector('[data-deliverable-stage-field="status"]');
     const expectedDateField = stageRow.row.querySelector('[data-deliverable-stage-field="expectedDate"]');
     const completedDateField = stageRow.row.querySelector('[data-deliverable-stage-field="completedDate"]');
+    const normalizedStatus = normalizeDeliverableStageStatus(stageRow.status);
     const existingStage =
       existingStages.find((stage) => stage.id === stageRow.id) ??
       existingStages.find((stage) => (stage.order ?? 0) === stageRow.order) ??
@@ -3830,20 +3839,20 @@ const validateDeliverableStageForm = (form, deliverable, projectId, ruleSetId = 
     const expectedDate = normalizeStageDateInput(stageRow.expectedDate);
     const completedDate = normalizeStageDateInput(stageRow.completedDate);
 
-    if (stageRow.status === "completed" && !completedDate) {
+    if (normalizedStatus === "completed" && !completedDate) {
       return {
         field: completedDateField,
         message: `Enter an actual date for ${existingStage.stageName} when the stage is marked done.`,
       };
     }
 
-    if (stageRow.status === "active" || stageRow.status === "blocked") {
+    if (normalizedStatus === "active") {
       inFlightStages.push(existingStage.stageName);
     }
 
     stages.push({
       ...existingStage,
-      status: stageRow.status,
+      status: normalizedStatus,
       expectedDate,
       completedDate,
     });
@@ -3852,7 +3861,7 @@ const validateDeliverableStageForm = (form, deliverable, projectId, ruleSetId = 
   if (inFlightStages.length > 1) {
     return {
       field: form.querySelector('[data-deliverable-stage-field="status"]'),
-      message: `Only one stage can be active or blocked at a time. Update ${formatLabelList(inFlightStages)}.`,
+      message: `Only one stage can be in progress at a time. Update ${formatLabelList(inFlightStages)}.`,
     };
   }
 
