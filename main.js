@@ -146,90 +146,7 @@ const normalizeProjectScopedCollection = (projectId, collection = []) => {
   return collection;
 };
 
-const APP_STORAGE_KEY = "delivera.app-state.v1";
-
-const normalizePersistedProject = (project) => {
-  if (!project || typeof project !== "object") {
-    return null;
-  }
-
-  const id = typeof project.id === "string" ? project.id.trim() : "";
-  const name = typeof project.name === "string" ? project.name.trim() : "";
-
-  if (!id || !name) {
-    return null;
-  }
-
-  return {
-    id,
-    name,
-    code: typeof project.code === "string" ? project.code : "",
-    defaultPhaseId: typeof project.defaultPhaseId === "string" ? project.defaultPhaseId : "",
-    archived: Boolean(project.archived),
-  };
-};
-
-const normalizePersistedProjectState = (projectId, projectState) => {
-  const normalizedState = createProjectState();
-
-  if (!projectState || typeof projectState !== "object") {
-    return normalizedState;
-  }
-
-  PROJECT_SCOPED_COLLECTION_KEYS.forEach((key) => {
-    normalizedState[key] = normalizeProjectScopedCollection(
-      projectId,
-      Array.isArray(projectState[key]) ? projectState[key] : [],
-    );
-  });
-
-  return normalizedState;
-};
-
-const getPersistedAppState = () => {
-  try {
-    const rawState = window.localStorage.getItem(APP_STORAGE_KEY);
-
-    if (!rawState) {
-      return null;
-    }
-
-    const parsedState = JSON.parse(rawState);
-    const projects = Array.isArray(parsedState?.projects)
-      ? parsedState.projects.map(normalizePersistedProject).filter(Boolean)
-      : [];
-
-    if (!projects.length) {
-      return null;
-    }
-
-    const projectStateStore = Object.fromEntries(
-      projects.map((project) => [
-        project.id,
-        normalizePersistedProjectState(project.id, parsedState?.projectStateStore?.[project.id]),
-      ]),
-    );
-    const currentProjectId =
-      typeof parsedState?.currentProjectId === "string" ? parsedState.currentProjectId : null;
-
-    return {
-      projects,
-      projectStateStore,
-      currentProjectId,
-    };
-  } catch (error) {
-    console.warn("Could not load persisted Delivera state.", error);
-    return null;
-  }
-};
-
 const createInitialAppState = () => {
-  const persistedState = getPersistedAppState();
-
-  if (persistedState) {
-    return persistedState;
-  }
-
   const projects = [...projectOptionList.querySelectorAll("[data-project-id]")].map((option) =>
     createProjectFromOption(option),
   );
@@ -604,23 +521,6 @@ const getProjectState = (projectId) => {
   });
 
   return projectState;
-};
-
-const persistAppState = () => {
-  try {
-    window.localStorage.setItem(
-      APP_STORAGE_KEY,
-      JSON.stringify({
-        projects,
-        projectStateStore: Object.fromEntries(
-          projects.map((project) => [project.id, getProjectState(project.id)]),
-        ),
-        currentProjectId: currentProject?.id ?? null,
-      }),
-    );
-  } catch (error) {
-    console.warn("Could not persist Delivera state.", error);
-  }
 };
 
 const getDefinitionItems = (view, projectId) => getProjectState(projectId)[view];
@@ -2926,7 +2826,7 @@ const renderProjectEditorBody = () => {
         <input
           type="text"
           data-project-field="code"
-          placeholder="PRJ-001"
+          placeholder="HXXXXXX"
           autocomplete="off"
           value="${escapeHtml(project?.code ?? "")}"
         />
@@ -3020,7 +2920,7 @@ const viewMeta = {
     copy: () =>
       projectEditorProjectId
         ? "Update the selected project's name, code, status, or default phase. Deletion removes its project-scoped definitions and deliverables."
-        : "Create a project record first, then define its phases, WBS items, packages, roles, members, deliverable types, and lifecycle stages. Set the default phase once phases exist.",
+        : "",
     eyebrow: "Projects",
     body: () => renderProjectEditorBody(),
   },
@@ -3293,7 +3193,6 @@ const renderView = () => {
     workspacePanel.classList.toggle("workspace-panel-wide", false);
     workspaceBody.innerHTML = renderNoProjectsBody();
     workspaceBody.hidden = false;
-    persistAppState();
     bindViewInteractions();
     return;
   }
@@ -3313,7 +3212,6 @@ const renderView = () => {
   workspacePanel.classList.toggle("workspace-panel-wide", currentView === "deliverables");
   workspaceBody.innerHTML = body;
   workspaceBody.hidden = !body;
-  persistAppState();
   bindViewInteractions();
 };
 
