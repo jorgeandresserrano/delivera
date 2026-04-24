@@ -49,6 +49,12 @@ const ACTION_ICON_MARKUP = Object.freeze({
       <path d="m9.68 3.32 3 3"></path>
     </svg>
   `,
+  close: `
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M4 4l8 8"></path>
+      <path d="M12 4 4 12"></path>
+    </svg>
+  `,
   delete: `
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M2.5 4.5h11"></path>
@@ -65,12 +71,17 @@ const renderActionIconButton = ({
   icon,
   label,
   tone = "default",
+  unframed = false,
   dataAttributes = {},
 }) => {
   const classes = ["definition-action", "definition-action-icon"];
 
   if (tone === "danger") {
     classes.push("definition-action-danger");
+  }
+
+  if (unframed) {
+    classes.push("definition-action-icon-plain");
   }
 
   const dataAttributeMarkup = Object.entries(dataAttributes)
@@ -322,6 +333,8 @@ const definitionConfigs = {
     createLabel: "Add phase",
     editLabel: "Save phase",
     inlineEdit: true,
+    inlineCreate: true,
+    textEditTrigger: true,
     listTitle: "Defined phases",
     emptyMessage: (project) => `No project phases yet for ${project.name}.`,
     getDisplayName: (item) => item.name,
@@ -362,6 +375,9 @@ const definitionConfigs = {
     createLabel: "Add WBS item",
     editLabel: "Save WBS item",
     inlineEdit: true,
+    inlineCreate: true,
+    textEditTrigger: true,
+    inlineGridColumns: "minmax(120px, 0.38fr) minmax(0, 1fr)",
     listTitle: "Defined WBS items",
     emptyMessage: (project) => `No WBS items yet for ${project.name}.`,
     getDisplayName: (item) => `${item.code} · ${item.name}`,
@@ -421,6 +437,9 @@ const definitionConfigs = {
     createLabel: "Add package",
     editLabel: "Save package",
     inlineEdit: true,
+    inlineCreate: true,
+    textEditTrigger: true,
+    inlineGridColumns: "minmax(120px, 0.38fr) minmax(0, 1fr)",
     listTitle: "Defined packages",
     emptyMessage: (project) => `No construction packages yet for ${project.name}.`,
     getDisplayName: (item) => (item.name ? `${item.code} · ${item.name}` : item.code),
@@ -473,6 +492,8 @@ const definitionConfigs = {
     createLabel: "Add role",
     editLabel: "Save role",
     inlineEdit: true,
+    inlineCreate: true,
+    textEditTrigger: true,
     listTitle: "Defined roles",
     emptyMessage: (project) => `No roles yet for ${project.name}.`,
     getDisplayName: (item) => item.name,
@@ -513,6 +534,8 @@ const definitionConfigs = {
     createLabel: "Add member",
     editLabel: "Save member",
     inlineEdit: true,
+    inlineCreate: true,
+    textEditTrigger: true,
     listTitle: "Defined members",
     emptyMessage: (project) => `No members yet for ${project.name}.`,
     getDisplayName: (item) => item.name,
@@ -520,7 +543,7 @@ const definitionConfigs = {
       {
         key: "name",
         label: "Member name",
-        placeholder: "Member name",
+        placeholder: "John Doe",
         required: true,
       },
     ],
@@ -1290,15 +1313,28 @@ const renderDefinitionForm = (view, item = null, projectId = currentProject?.id 
   const values = item ?? {};
   const isEditing = Boolean(item);
   const gridClass = config.fields.length === 1 ? " definition-form-grid-single" : "";
+  const gridStyle =
+    config.inlineGridColumns && config.fields.length > 1
+      ? ` style="grid-template-columns: ${escapeHtml(config.inlineGridColumns)};"`
+      : "";
+  const formClasses = [
+    "definition-form",
+    config.inlineCreate && !isEditing ? "definition-form-inline-create" : "",
+    config.inlineCreate && !isEditing && config.fields.length > 1
+      ? "definition-form-inline-create-wide"
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return `
     <form
-      class="definition-form"
+      class="${formClasses}"
       id="definitionForm"
       data-definition-view="${view}"
       ${isEditing ? `data-item-id="${item.id}"` : ""}
     >
-      <div class="definition-form-grid${gridClass}">
+      <div class="definition-form-grid${gridClass}"${gridStyle}>
         ${config.fields
           .map((field) => renderDefinitionField(field, values[field.key] ?? "", { projectId }))
           .join("")}
@@ -1324,6 +1360,10 @@ const renderDefinitionForm = (view, item = null, projectId = currentProject?.id 
 const renderDefinitionInlineEditForm = (view, item, index, projectId = currentProject?.id ?? "") => {
   const config = definitionConfigs[view];
   const gridClass = config.fields.length === 1 ? " definition-inline-grid-single" : "";
+  const gridStyle =
+    config.inlineGridColumns && config.fields.length > 1
+      ? ` style="grid-template-columns: ${escapeHtml(config.inlineGridColumns)};"`
+      : "";
 
   return `
     <li>
@@ -1334,18 +1374,10 @@ const renderDefinitionInlineEditForm = (view, item, index, projectId = currentPr
         data-item-id="${item.id}"
       >
         <span class="definition-index">${String(index + 1).padStart(2, "0")}</span>
-        <div class="definition-inline-grid${gridClass}">
+        <div class="definition-inline-grid${gridClass}"${gridStyle}>
           ${config.fields
             .map((field) => renderDefinitionField(field, item[field.key] ?? "", { projectId }))
             .join("")}
-        </div>
-        <div class="definition-actions">
-          <button class="definition-action definition-action-primary" type="submit">
-            Save
-          </button>
-          <button class="definition-action" type="button" data-action="cancel-definition-edit">
-            Cancel
-          </button>
         </div>
       </form>
     </li>
@@ -1370,23 +1402,30 @@ const renderDefinitionBody = (view, project) => {
                   <li class="definition-row">
                     <span class="definition-index">${String(index + 1).padStart(2, "0")}</span>
                     <div class="definition-copy">
-                      ${config.renderSummary(item, { projectId: project.id })}
+                      ${
+                        config.textEditTrigger
+                          ? `
+                            <button
+                              class="definition-text-trigger"
+                              type="button"
+                              data-action="edit-definition"
+                              data-definition-view="${view}"
+                              data-item-id="${item.id}"
+                              aria-label="Edit ${escapeHtml(config.singular)} ${escapeHtml(config.getDisplayName(item, { projectId: project.id }))}"
+                            >
+                              ${config.renderSummary(item, { projectId: project.id })}
+                            </button>
+                          `
+                          : config.renderSummary(item, { projectId: project.id })
+                      }
                     </div>
                     <div class="definition-actions">
                       ${renderActionIconButton({
-                        action: "edit-definition",
-                        icon: "edit",
-                        label: `Edit ${config.singular}`,
-                        dataAttributes: {
-                          "definition-view": view,
-                          "item-id": item.id,
-                        },
-                      })}
-                      ${renderActionIconButton({
                         action: "delete-definition",
-                        icon: "delete",
+                        icon: config.textEditTrigger ? "close" : "delete",
                         label: `Delete ${config.singular}`,
                         tone: "danger",
+                        unframed: Boolean(config.textEditTrigger),
                         dataAttributes: {
                           "definition-view": view,
                           "item-id": item.id,
@@ -1639,20 +1678,23 @@ const renderDeliverableTypesBody = (project) => {
 const renderStageRow = (stage, index) => `
   <div class="rule-row" data-stage-row>
     <span class="definition-index">${String(index + 1).padStart(2, "0")}</span>
-    <label class="field rule-field">
-      <span>Stage name</span>
-      <input
-        type="text"
-        data-stage-name
-        value="${escapeHtml(stage.name)}"
-        placeholder="Issued for review"
-        autocomplete="off"
-        required
-      />
-    </label>
-    <button class="definition-action" type="button" data-action="remove-stage-row">
-      Remove
-    </button>
+    <input
+      class="rule-row-input"
+      type="text"
+      data-stage-name
+      value="${escapeHtml(stage.name)}"
+      placeholder="Issued for review"
+      autocomplete="off"
+      aria-label="Stage name ${String(index + 1)}"
+      required
+    />
+    ${renderActionIconButton({
+      action: "remove-stage-row",
+      icon: "close",
+      label: `Remove stage ${index + 1}`,
+      tone: "danger",
+      unframed: true,
+    })}
   </div>
 `;
 
@@ -1685,8 +1727,9 @@ const renderRuleSetForm = ({ formId, ruleSet = null }) => {
             <span class="ruleset-count-pill" data-stage-count>
               ${pluralize(stages.length, "stage")}
             </span>
-            <button class="definition-action" type="button" data-action="add-stage-row">
-              Add stage
+            <button class="ruleset-add-stage-button" type="button" data-action="add-stage-row">
+              <span aria-hidden="true">+</span>
+              <span>Add stage</span>
             </button>
           </div>
         </div>
@@ -1695,20 +1738,17 @@ const renderRuleSetForm = ({ formId, ruleSet = null }) => {
         </div>
       </div>
 
-      <div class="ruleset-form-actions">
-        <button class="primary-button" type="submit">
-          ${isEditing ? "Save set" : "Create set"}
-        </button>
-        ${
-          isEditing
-            ? `
-              <button class="definition-action" type="button" data-action="cancel-rule-set-edit">
-                Cancel
+      ${
+        isEditing
+          ? ""
+          : `
+            <div class="ruleset-form-actions">
+              <button class="primary-button" type="submit">
+                Create set
               </button>
-            `
-            : ""
-        }
-      </div>
+            </div>
+          `
+      }
     </form>
   `;
 };
@@ -1841,7 +1881,7 @@ const renderRulesOfCreditBody = (project) => {
         })}
       </section>
 
-      <section class="definition-list-shell">
+      <section class="definition-list-shell ruleset-list-section">
         <div class="definition-list-head">
           <p class="definition-list-title">Defined lifecycle stage sets</p>
           <span class="definition-list-count">${ruleSets.length}</span>
@@ -3380,8 +3420,42 @@ const focusFirstField = (selector) => {
   }
 };
 
+const saveDefinitionForm = (form, view) => {
+  const itemId = form.dataset.itemId ?? null;
+  const validation = validateDefinitionForm(form, view, currentProject.id, itemId);
+
+  if (!("payload" in validation)) {
+    const field = form.querySelector(`[data-definition-field="${validation.field}"]`);
+    showFieldError(field, validation.message);
+    return false;
+  }
+
+  const items = getDefinitionItems(view, currentProject.id);
+
+  if (itemId) {
+    const item = items.find((entry) => entry.id === itemId);
+
+    if (!item) {
+      return false;
+    }
+
+    Object.assign(item, validation.payload);
+  } else {
+    items.push(createProjectScopedEntity(currentProject.id, validation.payload));
+  }
+
+  editingDefinition = {
+    view: null,
+    itemId: null,
+  };
+  renderView();
+  return true;
+};
+
 const bindDefinitionForm = (form, view) => {
   if (!form) return;
+
+  const isInlineEditForm = form.id === "definitionInlineEditForm";
 
   form.addEventListener("input", (event) => {
     if (
@@ -3395,42 +3469,34 @@ const bindDefinitionForm = (form, view) => {
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
+    saveDefinitionForm(form, view);
+  });
 
-    const itemId = form.dataset.itemId ?? null;
-    const validation = validateDefinitionForm(form, view, currentProject.id, itemId);
+  if (!isInlineEditForm) {
+    return;
+  }
 
-    if (!("payload" in validation)) {
-      const field = form.querySelector(`[data-definition-field="${validation.field}"]`);
-      showFieldError(field, validation.message);
-      return;
-    }
-
-    const items = getDefinitionItems(view, currentProject.id);
-
-    if (itemId) {
-      const item = items.find((entry) => entry.id === itemId);
-
-      if (!item) {
+  form.addEventListener("focusout", () => {
+    window.setTimeout(() => {
+      if (document.activeElement && form.contains(document.activeElement)) {
         return;
       }
 
-      Object.assign(item, validation.payload);
-    } else {
-      items.push(createProjectScopedEntity(currentProject.id, validation.payload));
-    }
+      saveDefinitionForm(form, view);
+    }, 0);
+  });
 
-    editingDefinition = {
-      view: null,
-      itemId: null,
-    };
-    renderView();
+  form.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveDefinitionForm(form, view);
+    }
   });
 };
 
 const bindDefinitionView = (view) => {
   const form = document.getElementById("definitionForm");
   const inlineEditForm = document.getElementById("definitionInlineEditForm");
-  const cancelButton = workspaceBody.querySelector('[data-action="cancel-definition-edit"]');
   const editButtons = workspaceBody.querySelectorAll('[data-action="edit-definition"]');
   const deleteButtons = workspaceBody.querySelectorAll('[data-action="delete-definition"]');
 
@@ -3438,14 +3504,6 @@ const bindDefinitionView = (view) => {
 
   bindDefinitionForm(form, view);
   bindDefinitionForm(inlineEditForm, view);
-
-  cancelButton?.addEventListener("click", () => {
-    editingDefinition = {
-      view: null,
-      itemId: null,
-    };
-    renderView();
-  });
 
   editButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -3620,15 +3678,44 @@ const bindDeliverableTypesView = () => {
 const bindRuleSetView = () => {
   const createForm = document.getElementById("ruleSetCreateForm");
   const inlineEditForm = document.getElementById("ruleSetInlineEditForm");
-  const cancelButton = workspaceBody.querySelector('[data-action="cancel-rule-set-edit"]');
   const editButtons = workspaceBody.querySelectorAll('[data-action="edit-rule-set"]');
   const deleteButtons = workspaceBody.querySelectorAll('[data-action="delete-rule-set"]');
 
   if (!createForm && !inlineEditForm) return;
 
+  const saveRuleSetForm = (form) => {
+    const ruleSetId = form.dataset.ruleSetId ?? null;
+    const validation = validateRuleSetForm(form, currentProject.id, ruleSetId);
+
+    if (!("payload" in validation)) {
+      showFieldError(validation.field, validation.message);
+      return false;
+    }
+
+    if (ruleSetId) {
+      const ruleSet = getRuleSets(currentProject.id).find((item) => item.id === ruleSetId);
+
+      if (!ruleSet) {
+        return false;
+      }
+
+      ruleSet.name = validation.payload.name;
+      ruleSet.stages = validation.payload.stages;
+      editingRuleSetId = null;
+    } else {
+      getRuleSets(currentProject.id).push(
+        createProjectScopedEntity(currentProject.id, validation.payload),
+      );
+    }
+
+    renderView();
+    return true;
+  };
+
   const bindRuleSetForm = (form) => {
     if (!form) return;
 
+    const isInlineEditForm = form.id === "ruleSetInlineEditForm";
     const rowsContainer = form.querySelector("[data-stage-rows]");
     const addStageButton = form.querySelector('[data-action="add-stage-row"]');
     const stageCount = form.querySelector("[data-stage-count]");
@@ -3693,44 +3780,33 @@ const bindRuleSetView = () => {
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-
-      const ruleSetId = form.dataset.ruleSetId ?? null;
-      const validation = validateRuleSetForm(form, currentProject.id, ruleSetId);
-
-      if (!("payload" in validation)) {
-        showFieldError(validation.field, validation.message);
-        return;
-      }
-
-      if (ruleSetId) {
-        const ruleSet = getRuleSets(currentProject.id).find((item) => item.id === ruleSetId);
-
-        if (!ruleSet) {
-          return;
-        }
-
-        ruleSet.name = validation.payload.name;
-        ruleSet.stages = validation.payload.stages;
-        editingRuleSetId = null;
-      } else {
-        getRuleSets(currentProject.id).push(
-          createProjectScopedEntity(currentProject.id, validation.payload),
-        );
-      }
-
-      renderView();
+      saveRuleSetForm(form);
     });
+
+    if (isInlineEditForm) {
+      form.addEventListener("focusout", () => {
+        window.setTimeout(() => {
+          if (document.activeElement && form.contains(document.activeElement)) {
+            return;
+          }
+
+          saveRuleSetForm(form);
+        }, 0);
+      });
+
+      form.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          saveRuleSetForm(form);
+        }
+      });
+    }
 
     updateStageRowState();
   };
 
   bindRuleSetForm(createForm);
   bindRuleSetForm(inlineEditForm);
-
-  cancelButton?.addEventListener("click", () => {
-    editingRuleSetId = null;
-    renderView();
-  });
 
   editButtons.forEach((button) => {
     button.addEventListener("click", () => {
